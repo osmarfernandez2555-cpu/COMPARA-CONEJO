@@ -155,7 +155,8 @@ const plataformas = [
   {
     id:'lavoz', nombre:'La Voz Clasificados', emoji:'🔴',
     bg:'#FFEBEE', color:'#C62828',
-    getUrl: q => `https://clasificados.lavoz.com.ar/autos?q=${encodeURIComponent(q)}`
+    nota:'Si no filtra automático, buscá manualmente en la sección Autos',
+    getUrl: q => `https://clasificados.lavoz.com.ar/autos?busqueda=${encodeURIComponent(q)}`
   },
   {
     id:'fb', nombre:'Facebook Marketplace', emoji:'🔵',
@@ -170,7 +171,12 @@ const plataformas = [
   {
     id:'autocosmos', nombre:'Autocosmos', emoji:'🟣',
     bg:'#EDE7F6', color:'#4527A0',
-    getUrl: q => `https://www.autocosmos.com.ar/autos/usados?q=${encodeURIComponent(q)}`
+    getUrl: q => `https://www.autocosmos.com.ar/auto/usado?q=${encodeURIComponent(q)}`
+  },
+  {
+    id:'deautos', nombre:'DeAutos', emoji:'⚫',
+    bg:'#ECEFF1', color:'#263238',
+    getUrl: q => `https://www.deautos.com/autos-usados?q=${encodeURIComponent(q)}`
   }
 ];
 
@@ -205,7 +211,10 @@ function generarLinks() {
     div.className = 'plat-card';
     div.innerHTML = `
       <div class="plat-icon" style="background:${p.bg};color:${p.color};font-size:18px">${p.emoji}</div>
-      <div class="plat-name">${p.nombre}</div>
+      <div style="flex:1;min-width:100px">
+        <div class="plat-name">${p.nombre}</div>
+        ${p.nota ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px">${p.nota}</div>` : ''}
+      </div>
       <a class="btn-open" href="${url}" target="_blank" rel="noopener">Buscar ↗</a>
       <div class="price-wrap" style="margin-top:6px;width:100%">
         <span class="curr">${moneda}</span>
