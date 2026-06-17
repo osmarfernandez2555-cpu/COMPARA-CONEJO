@@ -5,263 +5,363 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Comparador de Precios — Tutu Automotores</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
-  .header{background:#0d1b3e;padding:18px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-  .header-logo{background:#1a6dd4;color:#fff;font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;letter-spacing:1px}
-  .header h1{color:#fff;font-size:17px;font-weight:600}
-  .header span{color:#8ba4cc;font-size:12px;margin-left:auto}
-  .container{max-width:820px;margin:0 auto;padding:24px 16px}
-  .card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:20px 24px;margin-bottom:16px}
-  .section-title{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-  .field label{font-size:12px;color:#64748b;font-weight:500;display:block;margin-bottom:5px}
-  .field input,.field select{width:100%;height:40px;padding:0 12px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#1a1a2e;outline:none;transition:border .15s}
-  .field input:focus,.field select:focus{border-color:#1a6dd4}
-  .btn-search{width:100%;height:46px;background:#0d1b3e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s}
-  .btn-search:hover{background:#1a2d5a}
-  .plat-card{background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:14px 18px;margin-bottom:10px}
-  .plat-top{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
-  .plat-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-  .plat-info{flex:1;min-width:80px}
-  .plat-name{font-size:14px;font-weight:600;color:#1a1a2e}
-  .plat-url{font-size:11px;color:#94a3b8;margin-top:1px}
-  .btn-open{height:34px;padding:0 14px;border-radius:8px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#1a1a2e;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;text-decoration:none;transition:all .15s;white-space:nowrap}
-  .btn-open:hover{background:#e2e8f0}
-  .price-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .curr{font-size:12px;color:#64748b;font-weight:500;white-space:nowrap}
-  .price-input{flex:1;min-width:120px;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#1a1a2e;outline:none}
-  .price-input:focus{border-color:#1a6dd4;background:#fff}
-  .count-input{width:65px;height:34px;padding:0 8px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#1a1a2e;outline:none}
-  .count-input:focus{border-color:#1a6dd4;background:#fff}
-  .divider{height:1px;background:#e2e8f0;margin:20px 0}
-  .btn-calc{height:44px;padding:0 28px;background:#1a6dd4;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s}
-  .btn-calc:hover{background:#1558b0}
-  .result-box{background:linear-gradient(135deg,#0d1b3e 0%,#1a3a6e 100%);border-radius:12px;padding:22px 24px;color:#fff}
-  .result-main-label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba4cc;margin-bottom:6px}
-  .result-main-val{font-size:28px;font-weight:700;margin-bottom:16px}
-  .result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .result-mini{background:rgba(255,255,255,.1);border-radius:8px;padding:12px}
-  .result-mini-label{font-size:11px;color:#8ba4cc;margin-bottom:4px}
-  .result-mini-val{font-size:16px;font-weight:700}
-  .fuentes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-  .fuente-pill{background:rgba(255,255,255,.12);border-radius:20px;padding:4px 12px;font-size:12px;color:#b8cfe8}
-  .info-bar{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;display:flex;align-items:flex-start;gap:8px;margin-bottom:16px}
-  .hidden{display:none}
-  .nota-manual{font-size:11px;color:#f59e0b;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:4px 8px;margin-top:6px;display:inline-block}
-  @media(max-width:600px){
-    .grid2,.grid3{grid-template-columns:1fr}
-    .result-grid{grid-template-columns:1fr 1fr}
-  }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+.header{background:#0d1b3e;padding:16px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.logo{background:#1a6dd4;color:#fff;font-size:12px;font-weight:700;padding:5px 11px;border-radius:6px;letter-spacing:1px}
+.header h1{color:#fff;font-size:16px;font-weight:600}
+.header .fecha{color:#8ba4cc;font-size:12px;margin-left:auto}
+.wrap{max-width:820px;margin:0 auto;padding:24px 16px}
+.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:20px 24px;margin-bottom:16px}
+.stitle{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+label{font-size:12px;color:#64748b;font-weight:500;display:block;margin-bottom:5px}
+input,select{width:100%;height:40px;padding:0 12px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#1a1a2e;outline:none;transition:border .15s}
+input:focus,select:focus{border-color:#1a6dd4}
+.btn-buscar{width:100%;height:46px;background:#0d1b3e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s;margin-top:4px}
+.btn-buscar:hover{background:#1a2d5a}
+.btn-buscar:disabled{background:#94a3b8;cursor:not-allowed}
+
+/* Plataformas */
+.plats{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.plat-box{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:18px 20px;min-height:200px;display:flex;flex-direction:column}
+.plat-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.plat-emoji{font-size:22px}
+.plat-name{font-size:15px;font-weight:700;color:#1a1a2e}
+.plat-dom{font-size:11px;color:#94a3b8}
+.btn-ver{margin-left:auto;height:30px;padding:0 12px;border-radius:8px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#1a6dd4;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:4px;white-space:nowrap;transition:background .15s}
+.btn-ver:hover{background:#eff6ff}
+
+/* Estado loading */
+.estado{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:8px;color:#94a3b8;font-size:13px}
+.spinner{width:28px;height:28px;border:3px solid #e2e8f0;border-top-color:#1a6dd4;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Resultados ML */
+.precio-prom{font-size:26px;font-weight:700;color:#1a1a2e;margin-bottom:4px}
+.precio-sub{font-size:12px;color:#64748b;margin-bottom:12px}
+.precio-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.stat{background:#f8fafc;border-radius:8px;padding:10px 12px;border:1px solid #e2e8f0}
+.stat-label{font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.stat-val{font-size:14px;font-weight:700;color:#1a1a2e}
+.listings{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto}
+.listing-item{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#f8fafc;border-radius:7px;border:1px solid #f1f5f9;font-size:12px;gap:8px}
+.listing-title{color:#334155;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.listing-price{color:#1a6dd4;font-weight:700;white-space:nowrap}
+
+/* Marketplace manual */
+.mp-manual{display:flex;flex-direction:column;gap:10px;flex:1}
+.mp-info{font-size:12px;color:#64748b;line-height:1.5}
+.mp-inputs{display:flex;flex-direction:column;gap:8px}
+.mp-input-row{display:flex;align-items:center;gap:8px}
+.mp-label{font-size:12px;color:#64748b;width:100px;flex-shrink:0}
+.mp-input{height:34px;font-size:13px;padding:0 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#1a1a2e;outline:none;flex:1}
+.mp-input:focus{border-color:#1a6dd4;background:#fff}
+.btn-mp-calc{height:36px;padding:0 16px;background:#1565C0;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;align-self:flex-start}
+.mp-result{background:#eff6ff;border-radius:8px;padding:10px 12px;margin-top:6px}
+.mp-result-val{font-size:20px;font-weight:700;color:#1565C0}
+.mp-result-sub{font-size:11px;color:#64748b;margin-top:2px}
+
+/* Resumen final */
+.resumen{background:linear-gradient(135deg,#0d1b3e 0%,#163872 100%);border-radius:12px;padding:22px 24px;color:#fff;margin-top:4px}
+.res-label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba4cc;margin-bottom:6px}
+.res-main{font-size:30px;font-weight:700;margin-bottom:16px}
+.res-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.res-mini{background:rgba(255,255,255,.1);border-radius:8px;padding:12px}
+.res-mini-label{font-size:10px;color:#8ba4cc;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.res-mini-val{font-size:16px;font-weight:700}
+.pill{background:rgba(255,255,255,.12);border-radius:20px;padding:3px 11px;font-size:11px;color:#b8cfe8;display:inline-block;margin:3px 3px 0 0}
+
+.hidden{display:none}
+.error-msg{font-size:12px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;margin-top:8px}
+
+@media(max-width:600px){
+  .g2,.g3,.plats{grid-template-columns:1fr}
+  .res-grid{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="header-logo">TUTU</div>
+  <div class="logo">TUTU</div>
   <h1>Comparador de Precios de Autos</h1>
-  <span id="fecha-hdr"></span>
+  <span class="fecha" id="fecha"></span>
 </div>
 
-<div class="container">
-
+<div class="wrap">
   <div class="card">
-    <div class="section-title">Datos del vehículo</div>
-    <div class="grid2" style="margin-bottom:12px">
-      <div class="field"><label>Marca *</label><input id="marca" placeholder="ej: Toyota" /></div>
-      <div class="field"><label>Modelo *</label><input id="modelo" placeholder="ej: Corolla" /></div>
+    <div class="stitle">Datos del vehículo</div>
+    <div class="g2">
+      <div><label>Marca *</label><input id="marca" placeholder="ej: Toyota" /></div>
+      <div><label>Modelo *</label><input id="modelo" placeholder="ej: Corolla" /></div>
     </div>
-    <div class="grid3" style="margin-bottom:12px">
-      <div class="field"><label>Versión</label><input id="version" placeholder="ej: XEI CVT" /></div>
-      <div class="field"><label>Año</label><input id="anio" type="number" placeholder="ej: 2021" min="1990" max="2026" /></div>
-      <div class="field"><label>Kilometraje</label><input id="km" type="number" placeholder="ej: 50000" /></div>
-    </div>
-    <div class="grid2" style="margin-bottom:16px">
-      <div class="field">
-        <label>Moneda</label>
+    <div class="g3">
+      <div><label>Versión</label><input id="version" placeholder="ej: XEI CVT" /></div>
+      <div><label>Año</label><input id="anio" type="number" placeholder="ej: 2021" min="1990" max="2026"/></div>
+      <div><label>Moneda</label>
         <select id="moneda">
-          <option value="ARS">Pesos argentinos (ARS)</option>
+          <option value="ARS">Pesos (ARS)</option>
           <option value="USD">Dólares (USD)</option>
         </select>
       </div>
-      <div class="field">
-        <label>Tipo de cambio USD → ARS (opcional)</label>
-        <input id="tipocambio" type="number" placeholder="ej: 1300" />
-      </div>
     </div>
-    <button class="btn-search" onclick="generarLinks()">🔍 Generar búsquedas</button>
+    <button class="btn-buscar" id="btn-buscar" onclick="buscar()">🔍 Buscar precios</button>
   </div>
 
-  <div id="seccion-plataformas" class="hidden">
-    <div class="info-bar">
-      💡 Hacé clic en <strong style="margin:0 3px">Buscar ↗</strong> en cada plataforma, revisá los precios publicados y cargá el promedio que viste. La cantidad de publicaciones es opcional.
-    </div>
-    <div class="card" style="padding-bottom:8px">
-      <div class="section-title">Plataformas</div>
-      <div id="cards-container"></div>
-      <div class="divider"></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding-bottom:8px">
-        <div>
-          <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:2px">Calcular precio promedio</div>
-          <div style="font-size:12px;color:#64748b">Solo se toman las fuentes donde cargaste precio</div>
+  <div id="plats-section" class="hidden">
+    <div class="plats">
+      <!-- Mercado Libre -->
+      <div class="plat-box">
+        <div class="plat-header">
+          <span class="plat-emoji">🟡</span>
+          <div>
+            <div class="plat-name">Mercado Libre</div>
+            <div class="plat-dom">autos.mercadolibre.com.ar</div>
+          </div>
+          <a id="ml-link" class="btn-ver" href="#" target="_blank" rel="noopener">Ver ↗</a>
         </div>
-        <button class="btn-calc" onclick="calcular()">📊 Calcular promedio</button>
+        <div id="ml-content">
+          <div class="estado"><div class="spinner"></div>Buscando precios...</div>
+        </div>
+      </div>
+
+      <!-- Facebook Marketplace -->
+      <div class="plat-box">
+        <div class="plat-header">
+          <span class="plat-emoji">🔵</span>
+          <div>
+            <div class="plat-name">Facebook Marketplace</div>
+            <div class="plat-dom">facebook.com/marketplace</div>
+          </div>
+          <a id="fb-link" class="btn-ver" href="#" target="_blank" rel="noopener">Ver ↗</a>
+        </div>
+        <div class="mp-manual">
+          <p class="mp-info">Facebook bloquea el acceso automático. Abrí la búsqueda, revisá los precios y cargalos acá.</p>
+          <div class="mp-inputs">
+            <div class="mp-input-row">
+              <span class="mp-label">Precio mín:</span>
+              <input type="number" class="mp-input" id="fb-min" placeholder="ej: 12000000"/>
+            </div>
+            <div class="mp-input-row">
+              <span class="mp-label">Precio máx:</span>
+              <input type="number" class="mp-input" id="fb-max" placeholder="ej: 16000000"/>
+            </div>
+            <div class="mp-input-row">
+              <span class="mp-label">Cant. avisos:</span>
+              <input type="number" class="mp-input" id="fb-cant" placeholder="ej: 8" min="1"/>
+            </div>
+            <button class="btn-mp-calc" onclick="calcularFB()">Calcular promedio FB</button>
+          </div>
+          <div id="fb-result" class="hidden mp-result">
+            <div class="mp-result-val" id="fb-result-val">—</div>
+            <div class="mp-result-sub" id="fb-result-sub"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div id="resultado" class="hidden">
-      <div class="result-box">
-        <div class="result-main-label">Precio promedio de mercado</div>
-        <div class="result-main-val" id="res-promedio">—</div>
-        <div class="result-grid">
-          <div class="result-mini"><div class="result-mini-label">Mínimo visto</div><div class="result-mini-val" id="res-min">—</div></div>
-          <div class="result-mini"><div class="result-mini-label">Máximo visto</div><div class="result-mini-val" id="res-max">—</div></div>
-          <div class="result-mini"><div class="result-mini-label">Fuentes cargadas</div><div class="result-mini-val" id="res-count">—</div><div style="font-size:11px;color:#8ba4cc;margin-top:2px" id="res-pubs"></div></div>
+    <!-- Resumen -->
+    <div id="resumen-section" class="hidden">
+      <div class="resumen">
+        <div class="res-label">Precio promedio combinado</div>
+        <div class="res-main" id="res-main">—</div>
+        <div class="res-grid">
+          <div class="res-mini"><div class="res-mini-label">Mercado Libre</div><div class="res-mini-val" id="res-ml">—</div></div>
+          <div class="res-mini"><div class="res-mini-label">Marketplace</div><div class="res-mini-val" id="res-fb">—</div></div>
+          <div class="res-mini"><div class="res-mini-label">Diferencia</div><div class="res-mini-val" id="res-diff">—</div></div>
         </div>
-        <div class="fuentes-row" id="res-fuentes"></div>
-        <div id="res-equivalente"></div>
+        <div style="margin-top:12px" id="res-pills"></div>
       </div>
     </div>
   </div>
-
 </div>
 
 <script>
-// Autocosmos: usa /auto/usado/marca/modelo — normaliza texto a slug
-function slugify(s){ return s.trim().toLowerCase().replace(/\s+/g,'-').normalize('NFD').replace(/[\u0300-\u036f]/g,'') }
-
-// Demotores: usa /autos/usado-condición/marca/modelo
-function slugDemotores(s){ return s.trim().toLowerCase().replace(/\s+/g,'-').normalize('NFD').replace(/[\u0300-\u036f]/g,'') }
-
-const plataformas = [
-  {
-    id:'ml', nombre:'Mercado Libre', dominio:'autos.mercadolibre.com.ar', emoji:'🟡', bg:'#FFF9C4', color:'#B45309',
-    getUrl: (marca,modelo,version,anio) => {
-      const q = [marca,modelo,version,anio].filter(Boolean).join('-').toLowerCase().replace(/\s+/g,'-')
-      return `https://autos.mercadolibre.com.ar/${encodeURIComponent(q)}_NoIndex_True`
-    }
-  },
-  {
-    id:'autocosmos', nombre:'Autocosmos', dominio:'autocosmos.com.ar', emoji:'🟣', bg:'#EDE7F6', color:'#4527A0',
-    nota:'Lleva directo a la sección marca/modelo',
-    getUrl: (marca,modelo,version,anio) => {
-      const m = slugify(marca), mo = slugify(modelo)
-      let url = `https://www.autocosmos.com.ar/auto/usado/${m}/${mo}`
-      if(anio) url += `?yr=${anio}`
-      return url
-    }
-  },
-  {
-    id:'demotores', nombre:'DeMotores', dominio:'demotores.com.ar', emoji:'🟠', bg:'#FFF3E0', color:'#E65100',
-    nota:'Filtra por marca y modelo',
-    getUrl: (marca,modelo,version,anio) => {
-      const m = slugDemotores(marca), mo = slugDemotores(modelo)
-      return `https://demotores.com.ar/autos/usado-condici%C3%B3n/${m}/${mo}/`
-    }
-  },
-  {
-    id:'fb', nombre:'Facebook Marketplace', dominio:'facebook.com/marketplace', emoji:'🔵', bg:'#E3F2FD', color:'#1565C0',
-    getUrl: (marca,modelo,version,anio) => {
-      const q = [marca,modelo,version,anio].filter(Boolean).join(' ')
-      return `https://www.facebook.com/marketplace/cordoba/search/?query=${encodeURIComponent(q)}&category_id=vehicles`
-    }
-  },
-  {
-    id:'deruedas', nombre:'DeRuedas', dominio:'deruedas.com.ar', emoji:'🟢', bg:'#E8F5E9', color:'#2E7D32',
-    getUrl: (marca,modelo,version,anio) => {
-      const q = [marca,modelo,version,anio].filter(Boolean).join(' ')
-      return `https://www.deruedas.com.ar/precio/Autos?q=${encodeURIComponent(q)}`
-    }
-  },
-  {
-    id:'cca', nombre:'Autocosmos Guía CCA', dominio:'autocosmos.com.ar/guiadeprecios', emoji:'📋', bg:'#F3E5F5', color:'#6A1B9A',
-    nota:'Precio de referencia CCA oficial',
-    getUrl: (marca,modelo,version,anio) => {
-      const m = slugify(marca), mo = slugify(modelo)
-      const yr = anio || ''
-      return `https://www.autocosmos.com.ar/guiadeprecios/${m}/${mo}${yr ? '/'+yr : ''}`
-    }
-  }
-]
-
-;(function(){
-  const d = new Date()
-  const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
-  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
-  document.getElementById('fecha-hdr').textContent = `${dias[d.getDay()]} ${d.getDate()} de ${meses[d.getMonth()]} ${d.getFullYear()}`
+// Fecha
+(()=>{
+  const d=new Date(),dias=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],
+  meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+  document.getElementById('fecha').textContent=`${dias[d.getDay()]} ${d.getDate()} de ${meses[d.getMonth()]} ${d.getFullYear()}`
 })()
 
-function fmt(n, moneda){
-  return moneda === 'ARS'
-    ? '$ ' + Math.round(n).toLocaleString('es-AR')
-    : 'USD ' + Math.round(n).toLocaleString('es-AR')
+let mlPromedio = null
+let fbPromedio = null
+let monedaActual = 'ARS'
+
+function fmt(n, m){
+  m = m || monedaActual
+  return m==='ARS' ? '$ '+Math.round(n).toLocaleString('es-AR') : 'USD '+Math.round(n).toLocaleString('es-AR')
 }
 
-function generarLinks(){
+async function buscar(){
   const marca = document.getElementById('marca').value.trim()
   const modelo = document.getElementById('modelo').value.trim()
   const version = document.getElementById('version').value.trim()
   const anio = document.getElementById('anio').value.trim()
+  monedaActual = document.getElementById('moneda').value
+
   if(!marca || !modelo){ alert('Ingresá al menos Marca y Modelo'); return }
-  const moneda = document.getElementById('moneda').value
-  const container = document.getElementById('cards-container')
-  container.innerHTML = ''
-  plataformas.forEach(p => {
-    const url = p.getUrl(marca, modelo, version, anio)
-    const div = document.createElement('div')
-    div.className = 'plat-card'
-    div.innerHTML = `
-      <div class="plat-top">
-        <div class="plat-icon" style="background:${p.bg}">${p.emoji}</div>
-        <div class="plat-info">
-          <div class="plat-name">${p.nombre}</div>
-          <div class="plat-url">${p.dominio}</div>
-          ${p.nota ? `<span class="nota-manual">⚠ ${p.nota}</span>` : ''}
-        </div>
-        <a class="btn-open" href="${url}" target="_blank" rel="noopener">Buscar ↗</a>
-      </div>
-      <div class="price-row">
-        <span class="curr">${moneda}</span>
-        <input type="number" class="price-input" id="precio_${p.id}" placeholder="Precio promedio visto" />
-        <span class="curr">Publicaciones:</span>
-        <input type="number" class="count-input" id="count_${p.id}" placeholder="0" min="0" />
-      </div>
-    `
-    container.appendChild(div)
-  })
-  document.getElementById('seccion-plataformas').classList.remove('hidden')
-  document.getElementById('resultado').classList.add('hidden')
-  document.getElementById('seccion-plataformas').scrollIntoView({behavior:'smooth',block:'start'})
+
+  const q = [marca, modelo, version, anio].filter(Boolean).join(' ')
+  const qSlug = q.toLowerCase().replace(/\s+/g,'-')
+
+  // Links
+  document.getElementById('ml-link').href = `https://autos.mercadolibre.com.ar/${encodeURIComponent(qSlug)}_NoIndex_True`
+  document.getElementById('fb-link').href = `https://www.facebook.com/marketplace/cordoba/search/?query=${encodeURIComponent(q)}&category_id=vehicles`
+
+  // Mostrar sección
+  document.getElementById('plats-section').classList.remove('hidden')
+  document.getElementById('resumen-section').classList.add('hidden')
+  mlPromedio = null
+  fbPromedio = null
+
+  // Reset ML
+  document.getElementById('ml-content').innerHTML = `<div class="estado"><div class="spinner"></div>Buscando precios en ML...</div>`
+
+  const btn = document.getElementById('btn-buscar')
+  btn.disabled = true
+  btn.textContent = '⏳ Buscando...'
+
+  try {
+    await buscarML(q, marca, modelo, version, anio)
+  } catch(e){
+    document.getElementById('ml-content').innerHTML = `<div class="error-msg">Error al buscar. Verificá tu conexión e intentá de nuevo.</div>`
+  }
+
+  btn.disabled = false
+  btn.textContent = '🔍 Buscar precios'
+  actualizarResumen()
 }
 
-function calcular(){
-  const moneda = document.getElementById('moneda').value
-  const tc = parseFloat(document.getElementById('tipocambio').value) || 0
-  let precios = [], totalPubs = 0, fuentesUsadas = []
-  plataformas.forEach(p => {
-    const precio = parseFloat(document.getElementById('precio_'+p.id)?.value || 0)
-    const count = parseInt(document.getElementById('count_'+p.id)?.value || 0)
-    if(precio > 0){
-      precios.push(precio)
-      totalPubs += count
-      fuentesUsadas.push(p.nombre)
-    }
+async function buscarML(q, marca, modelo, version, anio){
+  const sistema = `Sos un asistente de la concesionaria Tutu Automotores en Córdoba, Argentina.
+Tu tarea: buscar en Mercado Libre Argentina precios de autos usados y devolver SOLO un JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+
+Formato requerido:
+{
+  "promedio": 12500000,
+  "minimo": 10000000,
+  "maximo": 15000000,
+  "cantidad": 8,
+  "moneda": "ARS",
+  "listings": [
+    {"titulo": "Toyota Corolla XEI 2021", "precio": 13000000, "moneda": "ARS"},
+    {"titulo": "Toyota Corolla 2021 CVT", "precio": 12000000, "moneda": "ARS"}
+  ],
+  "nota": "Precios relevados en MercadoLibre Argentina"
+}
+
+Reglas:
+- Buscá en autos.mercadolibre.com.ar el vehículo indicado
+- Devolvé entre 3 y 8 listings reales con título y precio
+- Calculá el promedio, mínimo y máximo de los precios encontrados
+- Si los precios están en USD, convertí a ARS usando tipo de cambio aproximado actual o devolvé en USD indicando moneda:"USD"
+- Si no encontrás resultados, devuelve {"error": "Sin resultados para esta búsqueda"}
+- SOLO JSON, sin texto antes ni después`
+
+  const userMsg = `Buscá en Mercado Libre Argentina autos usados: ${q}${anio ? ', año '+anio : ''}. Moneda preferida: ${document.getElementById('moneda').value}`
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:1000,
+      tools:[{type:'web_search_20250305',name:'web_search'}],
+      system: sistema,
+      messages:[{role:'user', content: userMsg}]
+    })
   })
-  if(precios.length === 0){ alert('Cargá al menos un precio en alguna plataforma'); return }
-  const promedio = precios.reduce((a,b)=>a+b,0) / precios.length
-  document.getElementById('res-promedio').textContent = fmt(promedio, moneda)
-  document.getElementById('res-min').textContent = fmt(Math.min(...precios), moneda)
-  document.getElementById('res-max').textContent = fmt(Math.max(...precios), moneda)
-  document.getElementById('res-count').textContent = precios.length + ' fuentes'
-  document.getElementById('res-pubs').textContent = totalPubs > 0 ? totalPubs + ' publicaciones analizadas' : ''
-  document.getElementById('res-fuentes').innerHTML = fuentesUsadas.map(f=>`<span class="fuente-pill">${f}</span>`).join('')
-  const eq = document.getElementById('res-equivalente')
-  if(moneda === 'USD' && tc > 0){
-    eq.innerHTML = `<div style="margin-top:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:12px"><div style="font-size:11px;color:#8ba4cc;margin-bottom:4px">Equivalente en pesos (TC $${tc.toLocaleString('es-AR')})</div><div style="font-size:20px;font-weight:700">$ ${Math.round(promedio*tc).toLocaleString('es-AR')}</div></div>`
-  } else { eq.innerHTML = '' }
-  document.getElementById('resultado').classList.remove('hidden')
-  document.getElementById('resultado').scrollIntoView({behavior:'smooth',block:'start'})
+
+  const data = await resp.json()
+
+  // Extraer texto de los bloques
+  let texto = ''
+  if(data.content){
+    for(const blk of data.content){
+      if(blk.type === 'text') texto += blk.text
+    }
+  }
+
+  // Limpiar y parsear JSON
+  texto = texto.replace(/```json|```/g,'').trim()
+
+  // Buscar JSON en el texto
+  const match = texto.match(/\{[\s\S]*\}/)
+  if(!match) throw new Error('No JSON')
+
+  const result = JSON.parse(match[0])
+
+  if(result.error){
+    document.getElementById('ml-content').innerHTML = `<div class="error-msg">${result.error}</div>`
+    return
+  }
+
+  mlPromedio = result.promedio
+  const m = result.moneda || monedaActual
+
+  let html = `
+    <div class="precio-prom">${fmt(result.promedio, m)}</div>
+    <div class="precio-sub">Promedio de ${result.cantidad || result.listings?.length || '—'} publicaciones encontradas</div>
+    <div class="precio-stats">
+      <div class="stat"><div class="stat-label">Mínimo</div><div class="stat-val">${fmt(result.minimo, m)}</div></div>
+      <div class="stat"><div class="stat-label">Máximo</div><div class="stat-val">${fmt(result.maximo, m)}</div></div>
+      <div class="stat"><div class="stat-label">Avisos</div><div class="stat-val">${result.cantidad || result.listings?.length || '—'}</div></div>
+    </div>`
+
+  if(result.listings && result.listings.length){
+    html += `<div class="listings">`
+    for(const l of result.listings){
+      html += `<div class="listing-item">
+        <span class="listing-title">${l.titulo}</span>
+        <span class="listing-price">${fmt(l.precio, l.moneda || m)}</span>
+      </div>`
+    }
+    html += `</div>`
+  }
+
+  if(result.nota){
+    html += `<div style="font-size:11px;color:#94a3b8;margin-top:8px">${result.nota}</div>`
+  }
+
+  document.getElementById('ml-content').innerHTML = html
+}
+
+function calcularFB(){
+  const min = parseFloat(document.getElementById('fb-min').value) || 0
+  const max = parseFloat(document.getElementById('fb-max').value) || 0
+  const cant = parseInt(document.getElementById('fb-cant').value) || 0
+  if(!min && !max){ alert('Ingresá al menos un precio'); return }
+  const vals = [min, max].filter(v => v > 0)
+  const prom = vals.reduce((a,b)=>a+b,0) / vals.length
+  fbPromedio = prom
+  document.getElementById('fb-result-val').textContent = fmt(prom)
+  document.getElementById('fb-result-sub').textContent = `Entre ${fmt(Math.min(...vals))} y ${fmt(Math.max(...vals))}${cant ? ' · '+cant+' avisos vistos' : ''}`
+  document.getElementById('fb-result').classList.remove('hidden')
+  actualizarResumen()
+}
+
+function actualizarResumen(){
+  const sec = document.getElementById('resumen-section')
+  if(!mlPromedio && !fbPromedio){ sec.classList.add('hidden'); return }
+  sec.classList.remove('hidden')
+  const vals = [mlPromedio, fbPromedio].filter(v => v !== null)
+  const prom = vals.reduce((a,b)=>a+b,0) / vals.length
+  document.getElementById('res-main').textContent = fmt(prom)
+  document.getElementById('res-ml').textContent = mlPromedio ? fmt(mlPromedio) : 'Pendiente'
+  document.getElementById('res-fb').textContent = fbPromedio ? fmt(fbPromedio) : 'Pendiente'
+  if(mlPromedio && fbPromedio){
+    const diff = Math.abs(mlPromedio - fbPromedio)
+    const pct = ((diff / Math.min(mlPromedio, fbPromedio)) * 100).toFixed(1)
+    const mayor = mlPromedio > fbPromedio ? 'ML más caro' : 'FB más caro'
+    document.getElementById('res-diff').textContent = `${fmt(diff)} (${pct}%)`
+    document.getElementById('res-pills').innerHTML = `<span class="pill">${mayor}</span><span class="pill">${vals.length} fuente${vals.length>1?'s':''}</span>`
+  } else {
+    document.getElementById('res-diff').textContent = '—'
+    document.getElementById('res-pills').innerHTML = `<span class="pill">${vals.length} fuente cargada</span>`
+  }
 }
 </script>
 </body>
