@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparador de Precios — Tutu Automotores</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+  .header{background:#0d1b3e;padding:18px 24px;display:flex;align-items:center;gap:14px}
+  .header-logo{background:#1a6dd4;color:#fff;font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;letter-spacing:1px}
+  .header h1{color:#fff;font-size:18px;font-weight:600}
+  .header span{color:#8ba4cc;font-size:12px;margin-left:auto}
+  .container{max-width:800px;margin:0 auto;padding:24px 16px}
+  .card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:20px 24px;margin-bottom:16px}
+  .section-title{font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .field label{font-size:12px;color:#64748b;font-weight:500;display:block;margin-bottom:5px}
+  .field input,.field select{width:100%;height:40px;padding:0 12px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#1a1a2e;outline:none;transition:border .15s}
+  .field input:focus,.field select:focus{border-color:#1a6dd4}
+  .btn-search{width:100%;height:46px;background:#0d1b3e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s}
+  .btn-search:hover{background:#1a2d5a}
+  .plat-card{background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .plat-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+  .plat-name{font-size:14px;font-weight:600;color:#1a1a2e;flex:1;min-width:100px}
+  .btn-open{height:34px;padding:0 14px;border-radius:8px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#1a1a2e;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;text-decoration:none;transition:all .15s}
+  .btn-open:hover{background:#e2e8f0}
+  .price-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .curr{font-size:12px;color:#64748b;font-weight:500}
+  .price-input{width:150px;height:34px;padding:0 10px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#1a1a2e;outline:none}
+  .price-input:focus{border-color:#1a6dd4;background:#fff}
+  .count-input{width:65px;height:34px;padding:0 8px;font-size:13px;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#1a1a2e;outline:none}
+  .count-input:focus{border-color:#1a6dd4;background:#fff}
+  .divider{height:1px;background:#e2e8f0;margin:20px 0}
+  .btn-calc{height:44px;padding:0 28px;background:#1a6dd4;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s}
+  .btn-calc:hover{background:#1558b0}
+  .result-box{background:linear-gradient(135deg,#0d1b3e 0%,#1a3a6e 100%);border-radius:12px;padding:22px 24px;color:#fff;margin-top:4px}
+  .result-main-label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba4cc;margin-bottom:6px}
+  .result-main-val{font-size:30px;font-weight:700;margin-bottom:16px}
+  .result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .result-mini{background:rgba(255,255,255,.1);border-radius:8px;padding:12px}
+  .result-mini-label{font-size:11px;color:#8ba4cc;margin-bottom:4px}
+  .result-mini-val{font-size:16px;font-weight:700}
+  .result-mini-sub{font-size:11px;color:#8ba4cc;margin-top:2px}
+  .fuentes-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .fuente-pill{background:rgba(255,255,255,.12);border-radius:20px;padding:4px 12px;font-size:12px;color:#b8cfe8}
+  .tag-alerta{background:#fef3c7;color:#92400e;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;margin-left:auto}
+  .hidden{display:none}
+  .info-bar{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;display:flex;align-items:center;gap:8px;margin-bottom:16px}
+  @media(max-width:600px){
+    .grid2,.grid3{grid-template-columns:1fr}
+    .plat-card{flex-direction:column;align-items:flex-start}
+    .result-grid{grid-template-columns:1fr 1fr}
+    .price-wrap{width:100%}
+    .price-input{flex:1}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">TUTU</div>
+  <h1>Comparador de Precios de Autos</h1>
+  <span id="fecha-hdr"></span>
+</div>
+
+<div class="container">
+
+  <div class="card">
+    <div class="section-title">Datos del vehículo</div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div class="field"><label>Marca *</label><input id="marca" placeholder="ej: Toyota" /></div>
+      <div class="field"><label>Modelo *</label><input id="modelo" placeholder="ej: Corolla" /></div>
+    </div>
+    <div class="grid3" style="margin-bottom:12px">
+      <div class="field"><label>Versión</label><input id="version" placeholder="ej: XEI 2.0 CVT" /></div>
+      <div class="field"><label>Año</label><input id="anio" type="number" placeholder="ej: 2021" min="1990" max="2026" /></div>
+      <div class="field"><label>Kilometraje</label><input id="km" type="number" placeholder="ej: 50000" /></div>
+    </div>
+    <div class="grid2" style="margin-bottom:16px">
+      <div class="field">
+        <label>Moneda</label>
+        <select id="moneda">
+          <option value="ARS">Pesos argentinos (ARS)</option>
+          <option value="USD">Dólares (USD)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Tipo de cambio USD → ARS (opcional)</label>
+        <input id="tipocambio" type="number" placeholder="ej: 1300" />
+      </div>
+    </div>
+    <button class="btn-search" onclick="generarLinks()">
+      🔍 Generar búsquedas
+    </button>
+  </div>
+
+  <div id="seccion-plataformas" class="hidden">
+    <div class="info-bar">
+      💡 Abrí cada plataforma, buscá el auto y cargá el precio promedio que encontrás. La cant. de publicaciones es opcional.
+    </div>
+    <div class="card" style="padding-bottom:8px">
+      <div class="section-title">Buscar en plataformas</div>
+      <div id="cards-container"></div>
+
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding-bottom:8px">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:2px">Calcular precio promedio</div>
+          <div style="font-size:12px;color:#64748b">Solo se toman las fuentes donde cargaste precio</div>
+        </div>
+        <button class="btn-calc" onclick="calcular()">📊 Calcular promedio</button>
+      </div>
+    </div>
+
+    <div id="resultado" class="hidden">
+      <div class="result-box">
+        <div class="result-main-label">Precio promedio de mercado</div>
+        <div class="result-main-val" id="res-promedio">—</div>
+        <div class="result-grid">
+          <div class="result-mini">
+            <div class="result-mini-label">Mínimo visto</div>
+            <div class="result-mini-val" id="res-min">—</div>
+          </div>
+          <div class="result-mini">
+            <div class="result-mini-label">Máximo visto</div>
+            <div class="result-mini-val" id="res-max">—</div>
+          </div>
+          <div class="result-mini">
+            <div class="result-mini-label">Fuentes cargadas</div>
+            <div class="result-mini-val" id="res-count">—</div>
+            <div class="result-mini-sub" id="res-pubs">—</div>
+          </div>
+        </div>
+        <div class="fuentes-row" id="res-fuentes"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const plataformas = [
+  {
+    id:'ml', nombre:'Mercado Libre', emoji:'🟡',
+    bg:'#FFF9C4', color:'#F57F17',
+    getUrl: q => `https://autos.mercadolibre.com.ar/${encodeURIComponent(q.replace(/\s+/g,'-').toLowerCase())}_NoIndex_True`
+  },
+  {
+    id:'olx', nombre:'OLX Autos', emoji:'🟢',
+    bg:'#E8F5E9', color:'#2E7D32',
+    getUrl: q => `https://www.olx.com.ar/autos-y-camionetas_c1500?q=${encodeURIComponent(q)}`
+  },
+  {
+    id:'lavoz', nombre:'La Voz Clasificados', emoji:'🔴',
+    bg:'#FFEBEE', color:'#C62828',
+    getUrl: q => `https://clasificados.lavoz.com.ar/autos?q=${encodeURIComponent(q)}`
+  },
+  {
+    id:'fb', nombre:'Facebook Marketplace', emoji:'🔵',
+    bg:'#E3F2FD', color:'#1565C0',
+    getUrl: q => `https://www.facebook.com/marketplace/cordoba/search/?query=${encodeURIComponent(q)}&category_id=vehicles`
+  },
+  {
+    id:'demotores', nombre:'Demotores', emoji:'🟠',
+    bg:'#FFF3E0', color:'#E65100',
+    getUrl: q => `https://www.demotores.com.ar/busqueda/?q=${encodeURIComponent(q)}`
+  },
+  {
+    id:'autocosmos', nombre:'Autocosmos', emoji:'🟣',
+    bg:'#EDE7F6', color:'#4527A0',
+    getUrl: q => `https://www.autocosmos.com.ar/autos/usados?q=${encodeURIComponent(q)}`
+  }
+];
+
+// Fecha en header
+(function(){
+  const d = new Date();
+  const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  document.getElementById('fecha-hdr').textContent = `${dias[d.getDay()]} ${d.getDate()} de ${meses[d.getMonth()]} ${d.getFullYear()}`;
+})();
+
+function fmt(n, moneda) {
+  return moneda === 'ARS'
+    ? '$ ' + Math.round(n).toLocaleString('es-AR')
+    : 'USD ' + Math.round(n).toLocaleString('es-AR');
+}
+
+function generarLinks() {
+  const marca = document.getElementById('marca').value.trim();
+  const modelo = document.getElementById('modelo').value.trim();
+  const version = document.getElementById('version').value.trim();
+  const anio = document.getElementById('anio').value.trim();
+  const km = document.getElementById('km').value.trim();
+  if (!marca || !modelo) { alert('Ingresá al menos Marca y Modelo'); return; }
+  const query = [marca, modelo, version, anio].filter(Boolean).join(' ');
+  const moneda = document.getElementById('moneda').value;
+  const container = document.getElementById('cards-container');
+  container.innerHTML = '';
+  plataformas.forEach(p => {
+    const url = p.getUrl(query);
+    const div = document.createElement('div');
+    div.className = 'plat-card';
+    div.innerHTML = `
+      <div class="plat-icon" style="background:${p.bg};color:${p.color};font-size:18px">${p.emoji}</div>
+      <div class="plat-name">${p.nombre}</div>
+      <a class="btn-open" href="${url}" target="_blank" rel="noopener">Buscar ↗</a>
+      <div class="price-wrap" style="margin-top:6px;width:100%">
+        <span class="curr">${moneda}</span>
+        <input type="number" class="price-input" id="precio_${p.id}" placeholder="Precio promedio" />
+        <span class="curr" style="margin-left:8px">Publicaciones:</span>
+        <input type="number" class="count-input" id="count_${p.id}" placeholder="0" min="0" />
+      </div>
+    `;
+    container.appendChild(div);
+  });
+  document.getElementById('seccion-plataformas').classList.remove('hidden');
+  document.getElementById('resultado').classList.add('hidden');
+  document.getElementById('seccion-plataformas').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function calcular() {
+  const moneda = document.getElementById('moneda').value;
+  const tc = parseFloat(document.getElementById('tipocambio').value) || 0;
+  let precios = [];
+  let totalPubs = 0;
+  let fuentesUsadas = [];
+  plataformas.forEach(p => {
+    const precio = parseFloat(document.getElementById('precio_'+p.id)?.value || 0);
+    const count = parseInt(document.getElementById('count_'+p.id)?.value || 0);
+    if (precio > 0) {
+      precios.push(precio);
+      totalPubs += count;
+      fuentesUsadas.push(p.nombre);
+    }
+  });
+  if (precios.length === 0) { alert('Cargá al menos un precio en alguna plataforma'); return; }
+  const promedio = precios.reduce((a,b)=>a+b,0) / precios.length;
+  const min = Math.min(...precios);
+  const max = Math.max(...precios);
+  document.getElementById('res-promedio').textContent = fmt(promedio, moneda);
+  document.getElementById('res-min').textContent = fmt(min, moneda);
+  document.getElementById('res-max').textContent = fmt(max, moneda);
+  document.getElementById('res-count').textContent = precios.length + ' fuentes';
+  document.getElementById('res-pubs').textContent = totalPubs > 0 ? totalPubs + ' publicaciones analizadas' : '';
+  const fRow = document.getElementById('res-fuentes');
+  fRow.innerHTML = fuentesUsadas.map(f => `<span class="fuente-pill">${f}</span>`).join('');
+  if (moneda === 'USD' && tc > 0) {
+    const extraDiv = document.createElement('div');
+    extraDiv.style.cssText = 'margin-top:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:12px';
+    extraDiv.innerHTML = `
+      <div style="font-size:11px;color:#8ba4cc;margin-bottom:4px">Equivalente en pesos (TC $${tc.toLocaleString('es-AR')})</div>
+      <div style="font-size:18px;font-weight:700">$ ${Math.round(promedio * tc).toLocaleString('es-AR')}</div>
+    `;
+    document.getElementById('res-fuentes').after(extraDiv);
+  }
+  document.getElementById('resultado').classList.remove('hidden');
+  document.getElementById('resultado').scrollIntoView({behavior:'smooth', block:'start'});
+}
+</script>
+</body>
+</html>
