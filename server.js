@@ -8,6 +8,11 @@ app.use(cors())
 app.use(express.json())
 app.use(express.static(path.join(__dirname, 'public')))
 
+app.get('/api/ping', (req, res) => {
+  const key = process.env.ANTHROPIC_API_KEY
+  res.json({ ok: true, key_cargada: !!key, key_inicio: key ? key.substring(0,10)+'...' : 'VACÍA' })
+})
+
 app.post('/api/buscar', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada en el servidor' })
