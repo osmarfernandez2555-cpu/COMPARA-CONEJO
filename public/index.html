@@ -19,25 +19,17 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;mi
 label{font-size:12px;color:#64748b;font-weight:500;display:block;margin-bottom:5px}
 input,select{width:100%;height:40px;padding:0 12px;font-size:14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;color:#1a1a2e;outline:none;transition:border .15s}
 input:focus,select:focus{border-color:#1a6dd4}
-.key-bar{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.key-bar label{color:#92400e;font-size:12px;font-weight:600;white-space:nowrap;margin:0}
-.key-input{flex:1;min-width:200px;height:36px;font-size:13px;border-color:#fde68a;background:#fffef0}
-.key-input:focus{border-color:#f59e0b}
-.btn-save-key{height:36px;padding:0 16px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
-.btn-save-key:hover{background:#d97706}
-.key-ok{font-size:12px;color:#059669;font-weight:600;display:none}
 .btn-buscar{width:100%;height:46px;background:#0d1b3e;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s}
 .btn-buscar:hover{background:#1a2d5a}
 .btn-buscar:disabled{background:#94a3b8;cursor:not-allowed}
 .plats{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-.plat{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:18px 20px;min-height:180px;display:flex;flex-direction:column}
+.plat{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:18px 20px;display:flex;flex-direction:column}
 .ph{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-.pico{font-size:22px}
 .pname{font-size:15px;font-weight:700;color:#1a1a2e}
 .pdom{font-size:11px;color:#94a3b8}
-.ver-btn{margin-left:auto;height:30px;padding:0 12px;border-radius:8px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#1a6dd4;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.ver-btn{margin-left:auto;height:30px;padding:0 12px;border-radius:8px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#1a6dd4;font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px;white-space:nowrap}
 .ver-btn:hover{background:#eff6ff}
-.spinner-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:8px;color:#94a3b8;font-size:13px}
+.spinner-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:8px;color:#94a3b8;font-size:13px;padding:2rem 0}
 .spinner{width:26px;height:26px;border:3px solid #e2e8f0;border-top-color:#1a6dd4;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .prom-val{font-size:24px;font-weight:700;color:#1a1a2e;margin-bottom:2px}
@@ -47,7 +39,7 @@ input:focus,select:focus{border-color:#1a6dd4}
 .stat-l{font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
 .stat-v{font-size:13px;font-weight:700;color:#1a1a2e}
 .listings{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto}
-.litem{display:flex;justify-content:space-between;align-items:center;padding:6px 9px;background:#f8fafc;border-radius:7px;border:1px solid #f1f5f9;font-size:12px;gap:6px}
+.litem{display:flex;justify-content:space-between;align-items:center;padding:6px 9px;background:#f8fafc;border-radius:7px;font-size:12px;gap:6px}
 .ltitle{color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lprice{color:#1a6dd4;font-weight:700;white-space:nowrap}
 .nota{font-size:11px;color:#94a3b8;margin-top:8px}
@@ -57,7 +49,6 @@ input:focus,select:focus{border-color:#1a6dd4}
 .fb-inp{height:34px;font-size:13px;padding:0 10px;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#1a1a2e;outline:none;flex:1}
 .fb-inp:focus{border-color:#1a6dd4;background:#fff}
 .btn-fbcalc{height:36px;padding:0 16px;background:#1565C0;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}
-.btn-fbcalc:hover{background:#0d47a1}
 .fb-res{background:#eff6ff;border-radius:8px;padding:10px 12px;margin-top:8px;border:1px solid #bfdbfe}
 .fb-res-val{font-size:20px;font-weight:700;color:#1565C0}
 .fb-res-sub{font-size:11px;color:#64748b;margin-top:2px}
@@ -76,30 +67,20 @@ input:focus,select:focus{border-color:#1a6dd4}
 </style>
 </head>
 <body>
-
 <div class="header">
   <div class="logo">TUTU</div>
   <h1>Comparador de Precios de Autos</h1>
   <span class="fecha" id="fecha"></span>
 </div>
-
 <div class="wrap">
-
-  <div class="key-bar">
-    <label>🔑 API Key Anthropic:</label>
-    <input type="password" class="key-input" id="api-key" placeholder="sk-ant-api03-..." />
-    <button class="btn-save-key" onclick="guardarKey()">Guardar</button>
-    <span class="key-ok" id="key-ok">✓ Key guardada</span>
-  </div>
-
   <div class="card">
     <div class="stitle">Datos del vehículo</div>
     <div class="g2">
-      <div><label>Marca *</label><input id="marca" placeholder="ej: Toyota" /></div>
-      <div><label>Modelo *</label><input id="modelo" placeholder="ej: Corolla" /></div>
+      <div><label>Marca *</label><input id="marca" placeholder="ej: Toyota"/></div>
+      <div><label>Modelo *</label><input id="modelo" placeholder="ej: Corolla"/></div>
     </div>
     <div class="g3">
-      <div><label>Versión</label><input id="version" placeholder="ej: XEI CVT" /></div>
+      <div><label>Versión</label><input id="version" placeholder="ej: XEI CVT"/></div>
       <div><label>Año</label><input id="anio" type="number" placeholder="ej: 2021" min="1990" max="2026"/></div>
       <div><label>Moneda</label>
         <select id="moneda">
@@ -115,7 +96,7 @@ input:focus,select:focus{border-color:#1a6dd4}
     <div class="plats">
       <div class="plat">
         <div class="ph">
-          <span class="pico">🟡</span>
+          <span style="font-size:22px">🟡</span>
           <div><div class="pname">Mercado Libre</div><div class="pdom">autos.mercadolibre.com.ar</div></div>
           <a id="ml-link" class="ver-btn" href="#" target="_blank" rel="noopener">Ver ↗</a>
         </div>
@@ -123,10 +104,9 @@ input:focus,select:focus{border-color:#1a6dd4}
           <div class="spinner-wrap"><div class="spinner"></div>Buscando precios...</div>
         </div>
       </div>
-
       <div class="plat">
         <div class="ph">
-          <span class="pico">🔵</span>
+          <span style="font-size:22px">🔵</span>
           <div><div class="pname">Facebook Marketplace</div><div class="pdom">facebook.com/marketplace</div></div>
           <a id="fb-link" class="ver-btn" href="#" target="_blank" rel="noopener">Ver ↗</a>
         </div>
@@ -141,7 +121,6 @@ input:focus,select:focus{border-color:#1a6dd4}
         </div>
       </div>
     </div>
-
     <div id="resumen" class="resumen hidden">
       <div class="res-label">Precio promedio combinado</div>
       <div class="res-main" id="res-main">—</div>
@@ -153,160 +132,115 @@ input:focus,select:focus{border-color:#1a6dd4}
       <div class="pills" id="res-pills"></div>
     </div>
   </div>
-
 </div>
 
 <script>
 let mlProm = null, fbProm = null, mon = 'ARS'
 
 ;(()=>{
-  const d = new Date()
-  const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
-  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
-  document.getElementById('fecha').textContent = `${dias[d.getDay()]} ${d.getDate()} de ${meses[d.getMonth()]} ${d.getFullYear()}`
-  const k = localStorage.getItem('tutu_apikey')
-  if(k){ document.getElementById('api-key').value = k; document.getElementById('key-ok').style.display='inline' }
+  const d=new Date(),dias=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],
+  meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+  document.getElementById('fecha').textContent=`${dias[d.getDay()]} ${d.getDate()} de ${meses[d.getMonth()]} ${d.getFullYear()}`
 })()
 
-function guardarKey(){
-  const k = document.getElementById('api-key').value.trim()
-  if(!k){ alert('Ingresá la API key'); return }
-  localStorage.setItem('tutu_apikey', k)
-  document.getElementById('key-ok').style.display = 'inline'
-}
-
-function getKey(){
-  return document.getElementById('api-key').value.trim() || localStorage.getItem('tutu_apikey') || ''
-}
-
-function fmt(n, m){
-  m = m || mon
-  return m === 'ARS' ? '$ ' + Math.round(n).toLocaleString('es-AR') : 'USD ' + Math.round(n).toLocaleString('es-AR')
-}
+function fmt(n,m){ m=m||mon; return m==='ARS'?'$ '+Math.round(n).toLocaleString('es-AR'):'USD '+Math.round(n).toLocaleString('es-AR') }
 
 async function buscar(){
-  const key = getKey()
-  if(!key){ alert('Primero ingresá tu API key de Anthropic arriba'); return }
-  const marca = document.getElementById('marca').value.trim()
-  const modelo = document.getElementById('modelo').value.trim()
-  const version = document.getElementById('version').value.trim()
-  const anio = document.getElementById('anio').value.trim()
-  mon = document.getElementById('moneda').value
-  if(!marca || !modelo){ alert('Ingresá al menos Marca y Modelo'); return }
-
-  const q = [marca, modelo, version, anio].filter(Boolean).join(' ')
-  const qslug = q.toLowerCase().replace(/\s+/g,'-')
-
-  document.getElementById('ml-link').href = `https://autos.mercadolibre.com.ar/${encodeURIComponent(qslug)}_NoIndex_True`
-  document.getElementById('fb-link').href = `https://www.facebook.com/marketplace/cordoba/search/?query=${encodeURIComponent(q)}&category_id=vehicles`
-
+  const marca=document.getElementById('marca').value.trim()
+  const modelo=document.getElementById('modelo').value.trim()
+  const version=document.getElementById('version').value.trim()
+  const anio=document.getElementById('anio').value.trim()
+  mon=document.getElementById('moneda').value
+  if(!marca||!modelo){alert('Ingresá al menos Marca y Modelo');return}
+  const q=[marca,modelo,version,anio].filter(Boolean).join(' ')
+  const qslug=q.toLowerCase().replace(/\s+/g,'-')
+  document.getElementById('ml-link').href=`https://autos.mercadolibre.com.ar/${encodeURIComponent(qslug)}_NoIndex_True`
+  document.getElementById('fb-link').href=`https://www.facebook.com/marketplace/cordoba/search/?query=${encodeURIComponent(q)}&category_id=vehicles`
   document.getElementById('plats-section').classList.remove('hidden')
   document.getElementById('resumen').classList.add('hidden')
-  document.getElementById('ml-content').innerHTML = '<div class="spinner-wrap"><div class="spinner"></div>Buscando en Mercado Libre...</div>'
-  mlProm = null
-
-  const btn = document.getElementById('btn-buscar')
-  btn.disabled = true
-  btn.textContent = '⏳ Buscando...'
-
-  try {
-    const sys = `Sos un asistente de la concesionaria Tutu Automotores en Córdoba, Argentina.
-Buscá precios reales de autos usados en Mercado Libre Argentina (autos.mercadolibre.com.ar) y devolvé SOLO un JSON válido, sin texto extra, sin markdown, sin explicaciones.
-
-Formato exacto:
-{"promedio":12500000,"minimo":10000000,"maximo":15000000,"cantidad":6,"moneda":"ARS","listings":[{"titulo":"Toyota Corolla XEI 2021","precio":13000000},{"titulo":"Toyota Corolla 2021 CVT","precio":12000000}],"nota":"Datos relevados de MercadoLibre Argentina"}
-
-Si no hay resultados devolvé: {"error":"Sin resultados para esta búsqueda"}
-SOLO JSON. Nada más.`
-
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-client-side-api-key-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        tools: [{type: 'web_search_20250305', name: 'web_search'}],
-        system: sys,
-        messages: [{role: 'user', content: `Buscá en Mercado Libre Argentina autos usados: ${q}. Moneda preferida: ${mon}. Traé entre 4 y 8 avisos reales con título y precio.`}]
+  document.getElementById('ml-content').innerHTML='<div class="spinner-wrap"><div class="spinner"></div>Buscando en Mercado Libre...</div>'
+  mlProm=null
+  const btn=document.getElementById('btn-buscar')
+  btn.disabled=true; btn.textContent='⏳ Buscando...'
+  try{
+    const sys=`Sos un asistente de Tutu Automotores en Córdoba, Argentina. Buscá precios reales de autos usados en Mercado Libre Argentina y devolvé SOLO un JSON válido sin texto extra ni markdown.
+Formato: {"promedio":12500000,"minimo":10000000,"maximo":15000000,"cantidad":6,"moneda":"ARS","listings":[{"titulo":"Toyota Corolla XEI 2021","precio":13000000}],"nota":"Datos de MercadoLibre Argentina"}
+Si no hay resultados: {"error":"Sin resultados"}
+SOLO JSON.`
+    const resp=await fetch('/api/buscar',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',max_tokens:1000,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        system:sys,
+        messages:[{role:'user',content:`Buscá en Mercado Libre Argentina autos usados: ${q}. Moneda: ${mon}. Traé 4 a 8 avisos reales.`}]
       })
     })
-
-    const data = await resp.json()
-
-    if(data.error){ throw new Error(data.error.message || 'API error') }
-
-    let texto = ''
-    if(data.content) for(const b of data.content) if(b.type==='text') texto += b.text
-    texto = texto.replace(/```json|```/g,'').trim()
-    const match = texto.match(/\{[\s\S]*\}/)
-    if(!match) throw new Error('No JSON en respuesta')
-    const r = JSON.parse(match[0])
-
+    const data=await resp.json()
+    if(data.error) throw new Error(data.error.message||data.error)
+    let texto=''
+    if(data.content) for(const b of data.content) if(b.type==='text') texto+=b.text
+    texto=texto.replace(/```json|```/g,'').trim()
+    const match=texto.match(/\{[\s\S]*\}/)
+    if(!match) throw new Error('Respuesta inválida')
+    const r=JSON.parse(match[0])
     if(r.error){
-      document.getElementById('ml-content').innerHTML = `<div class="err">${r.error}</div>`
+      document.getElementById('ml-content').innerHTML=`<div class="err">${r.error}</div>`
     } else {
-      mlProm = r.promedio
-      const m = r.moneda || mon
-      let html = `<div class="prom-val">${fmt(r.promedio, m)}</div>
-<div class="prom-sub">Promedio de ${r.cantidad || r.listings?.length || '?'} avisos en ML</div>
+      mlProm=r.promedio
+      const m=r.moneda||mon
+      let html=`<div class="prom-val">${fmt(r.promedio,m)}</div><div class="prom-sub">Promedio de ${r.cantidad||r.listings?.length||'?'} avisos en ML</div>
 <div class="stats">
-  <div class="stat"><div class="stat-l">Mínimo</div><div class="stat-v">${fmt(r.minimo, m)}</div></div>
-  <div class="stat"><div class="stat-l">Máximo</div><div class="stat-v">${fmt(r.maximo, m)}</div></div>
-  <div class="stat"><div class="stat-l">Avisos</div><div class="stat-v">${r.cantidad || r.listings?.length || '?'}</div></div>
+  <div class="stat"><div class="stat-l">Mínimo</div><div class="stat-v">${fmt(r.minimo,m)}</div></div>
+  <div class="stat"><div class="stat-l">Máximo</div><div class="stat-v">${fmt(r.maximo,m)}</div></div>
+  <div class="stat"><div class="stat-l">Avisos</div><div class="stat-v">${r.cantidad||r.listings?.length||'?'}</div></div>
 </div>`
       if(r.listings?.length){
-        html += '<div class="listings">'
-        for(const l of r.listings) html += `<div class="litem"><span class="ltitle">${l.titulo}</span><span class="lprice">${fmt(l.precio, l.moneda||m)}</span></div>`
-        html += '</div>'
+        html+='<div class="listings">'
+        for(const l of r.listings) html+=`<div class="litem"><span class="ltitle">${l.titulo}</span><span class="lprice">${fmt(l.precio,l.moneda||m)}</span></div>`
+        html+='</div>'
       }
-      if(r.nota) html += `<div class="nota">${r.nota}</div>`
-      document.getElementById('ml-content').innerHTML = html
+      if(r.nota) html+=`<div class="nota">${r.nota}</div>`
+      document.getElementById('ml-content').innerHTML=html
       actualizarResumen()
     }
   } catch(e){
-    document.getElementById('ml-content').innerHTML = `<div class="err">Error: ${e.message}. Verificá la API key y tu conexión.</div>`
+    document.getElementById('ml-content').innerHTML=`<div class="err">Error: ${e.message}</div>`
   }
-
-  btn.disabled = false
-  btn.textContent = '🔍 Buscar precios en ML'
+  btn.disabled=false; btn.textContent='🔍 Buscar precios en ML'
 }
 
 function calcFB(){
-  const min = parseFloat(document.getElementById('fb-min').value) || 0
-  const max = parseFloat(document.getElementById('fb-max').value) || 0
-  const cant = parseInt(document.getElementById('fb-cant').value) || 0
-  if(!min && !max){ alert('Ingresá al menos un precio'); return }
-  const vals = [min, max].filter(v => v > 0)
-  fbProm = vals.reduce((a,b)=>a+b,0) / vals.length
-  document.getElementById('fb-res-val').textContent = fmt(fbProm)
-  document.getElementById('fb-res-sub').textContent = cant ? `${cant} avisos vistos en Marketplace` : 'Promedio ingresado manualmente'
+  const min=parseFloat(document.getElementById('fb-min').value)||0
+  const max=parseFloat(document.getElementById('fb-max').value)||0
+  const cant=parseInt(document.getElementById('fb-cant').value)||0
+  if(!min&&!max){alert('Ingresá al menos un precio');return}
+  const vals=[min,max].filter(v=>v>0)
+  fbProm=vals.reduce((a,b)=>a+b,0)/vals.length
+  document.getElementById('fb-res-val').textContent=fmt(fbProm)
+  document.getElementById('fb-res-sub').textContent=cant?`${cant} avisos vistos`:'Promedio ingresado'
   document.getElementById('fb-res').classList.remove('hidden')
   actualizarResumen()
 }
 
 function actualizarResumen(){
-  const sec = document.getElementById('resumen')
-  if(!mlProm && !fbProm){ sec.classList.add('hidden'); return }
+  const sec=document.getElementById('resumen')
+  if(!mlProm&&!fbProm){sec.classList.add('hidden');return}
   sec.classList.remove('hidden')
-  const vals = [mlProm, fbProm].filter(v => v !== null)
-  const prom = vals.reduce((a,b)=>a+b,0) / vals.length
-  document.getElementById('res-main').textContent = fmt(prom)
-  document.getElementById('res-ml').textContent = mlProm ? fmt(mlProm) : 'Pendiente'
-  document.getElementById('res-fb').textContent = fbProm ? fmt(fbProm) : 'Pendiente'
-  if(mlProm && fbProm){
-    const diff = Math.abs(mlProm - fbProm)
-    const pct = ((diff / Math.min(mlProm, fbProm)) * 100).toFixed(1)
-    const mayor = mlProm > fbProm ? 'ML más alto' : 'FB más alto'
-    document.getElementById('res-diff').textContent = `${fmt(diff)} (${pct}%)`
-    document.getElementById('res-pills').innerHTML = `<span class="pill">${mayor}</span><span class="pill">2 fuentes</span>`
+  const vals=[mlProm,fbProm].filter(v=>v!==null)
+  const prom=vals.reduce((a,b)=>a+b,0)/vals.length
+  document.getElementById('res-main').textContent=fmt(prom)
+  document.getElementById('res-ml').textContent=mlProm?fmt(mlProm):'Pendiente'
+  document.getElementById('res-fb').textContent=fbProm?fmt(fbProm):'Pendiente'
+  if(mlProm&&fbProm){
+    const diff=Math.abs(mlProm-fbProm)
+    const pct=((diff/Math.min(mlProm,fbProm))*100).toFixed(1)
+    document.getElementById('res-diff').textContent=`${fmt(diff)} (${pct}%)`
+    document.getElementById('res-pills').innerHTML=`<span class="pill">${mlProm>fbProm?'ML más alto':'FB más alto'}</span><span class="pill">2 fuentes</span>`
   } else {
-    document.getElementById('res-diff').textContent = '—'
-    document.getElementById('res-pills').innerHTML = `<span class="pill">Falta cargar FB Marketplace</span>`
+    document.getElementById('res-diff').textContent='—'
+    document.getElementById('res-pills').innerHTML=`<span class="pill">Falta cargar FB Marketplace</span>`
   }
 }
 </script>
