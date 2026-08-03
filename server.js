@@ -10,12 +10,19 @@ app.use(express.json({ limit: '50mb' }))
 app.use(express.static(path.join(__dirname, 'public')))
 
 // ── PostgreSQL ──────────────────────────────────────────────
+const isInternal = (process.env.DATABASE_URL || '').includes('railway.internal')
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: isInternal ? false : { rejectUnauthorized: false }
 })
 
 async function initDB() {
+  try {
+    await pool.query('SELECT 1')
+    console.log('✅ PostgreSQL conectado OK')
+  } catch(e) {
+    console.error('❌ PostgreSQL NO conectado:', e.message)
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS stock (
       id SERIAL PRIMARY KEY,
@@ -42,8 +49,26 @@ console.log('ANTHROPIC_API_KEY:', !!process.env.ANTHROPIC_API_KEY)
 console.log('DATABASE_URL:', !!process.env.DATABASE_URL)
 
 // ── Health check ────────────────────────────────────────────
-app.get('/api/ping', (req, res) => {
-  res.json({ ok: true, key: !!process.env.ANTHROPIC_API_KEY, db: !!process.env.DATABASE_URL })
+app.get('/api/ping', async (req, res) => {
+  let dbOk = false
+  let dbMsg = 'no DATABASE_URL'
+  if (process.env.DATABASE_URL) {
+    try {
+      await pool.query('SELECT 1')
+      dbOk = true
+      dbMsg = 'conectado'
+    } catch(e) {
+      dbMsg = e.message.substring(0, 80)
+    }
+  }
+  res.json({ 
+    ok: true, 
+    key: !!process.env.ANTHROPIC_API_KEY, 
+    db: dbOk,
+    db_msg: dbMsg,
+    db_url_presente: !!process.env.DATABASE_URL,
+    internal: (process.env.DATABASE_URL||'').includes('railway.internal')
+  })
 })
 
 // ── Stock: leer ─────────────────────────────────────────────
