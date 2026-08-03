@@ -10,9 +10,10 @@ app.use(express.json({ limit: '50mb' }))
 app.use(express.static(path.join(__dirname, 'public')))
 
 // ── PostgreSQL ──────────────────────────────────────────────
-const isInternal = (process.env.DATABASE_URL || '').includes('railway.internal')
+const dbUrl = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.POSTGRES_URL
+const isInternal = (dbUrl || '').includes('railway.internal')
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: dbUrl,
   ssl: isInternal ? false : { rejectUnauthorized: false }
 })
 
@@ -47,6 +48,12 @@ initDB().catch(e => console.error('DB init error:', e.message))
 console.log('=== RUTHINA SERVER ===')
 console.log('ANTHROPIC_API_KEY:', !!process.env.ANTHROPIC_API_KEY)
 console.log('DATABASE_URL:', !!process.env.DATABASE_URL)
+console.log('DATABASE_PRIVATE_URL:', !!process.env.DATABASE_PRIVATE_URL)
+console.log('PGHOST:', process.env.PGHOST || 'no definido')
+console.log('POSTGRES_URL:', !!process.env.POSTGRES_URL)
+// Intentar con cualquier variable que tenga postgres
+const dbUrl = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.POSTGRES_URL || process.env.PGDATABASE
+console.log('DB URL encontrada:', !!dbUrl)
 
 // ── Health check ────────────────────────────────────────────
 app.get('/api/ping', async (req, res) => {
