@@ -266,6 +266,67 @@ app.get('/api/match', async (req, res) => {
 })
 
 
+
+// ── Clientes: carga masiva desde texto/lista ────────────────
+app.post('/api/clientes/bulk', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
+  
+  const { texto } = req.body
+  if (!texto) return res.status(400).json({ error: 'Texto requerido' })
+
+  try {
+    // Usar Claude para parsear la lista
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","notas":""}]. Si el vehiculo dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
+        messages: [{ role: 'user', content: 'Parseá esta lista:
+' + texto }]
+      })
+    })
+    const data = await response.json()
+    let raw = data.content?.[0]?.text || '[]'
+    raw = raw.replace(/```json|```/g, '').trim()
+    const match = raw.match(/\[[\s\S]*\]/)
+    if (!match) return res.status(400).json({ error: 'No se pudo parsear la lista' })
+    
+    const clientes = JSON.parse(match[0])
+    let guardados = 0, errores = 0
+
+    for (const c of clientes) {
+      try {
+        if (!c.nombre) continue
+        await pool.query(
+          'INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,notas) VALUES ($1,$2,$3,$4,$5)',
+          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.notas||'']
+        )
+        guardados++
+      } catch(e) { errores++ }
+    }
+
+    // Buscar matches en stock para toda la lista
+    const conModelo = clientes.filter(c => c.modelo && c.modelo.length > 2)
+    let matches = []
+    for (const c of conModelo) {
+      const r = await pool.query(
+        'SELECT marca,modelo,version,anio,precio,moneda,ubicacion FROM stock WHERE LOWER(modelo) LIKE LOWER($1)',
+        [`%${c.modelo.split(' ')[0]}%`]
+      )
+      if (r.rows.length > 0) {
+        matches.push({ cliente: c.nombre, busca: c.modelo, autos: r.rows })
+      }
+    }
+
+    res.json({ ok: true, guardados, errores, matches })
+  } catch(e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // ── Clientes busqueda: leer ──────────────────────────────────
 app.get('/api/clientes', async (req, res) => {
   try {
