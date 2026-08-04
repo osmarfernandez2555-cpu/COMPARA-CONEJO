@@ -86,7 +86,7 @@ app.get('/api/stock', async (req, res) => {
 // ── Stock: guardar / actualizar ──────────────────────────────
 app.post('/api/stock', async (req, res) => {
   try {
-    const { marca, modelo, version='', anio='', km=0, color='', precio='', moneda='ARS', estado='Disponible', notas='' } = req.body
+    const { marca, modelo, version='', anio='', km=0, color='', precio='', moneda='ARS', estado='Disponible', notas='', ubicacion='Tutu Automotores' } = req.body
     if (!marca || !modelo) return res.status(400).json({ error: 'Marca y modelo son requeridos' })
 
     // Buscar si ya existe
@@ -97,8 +97,8 @@ app.post('/api/stock', async (req, res) => {
 
     if (existe.rows.length > 0) {
       await pool.query(
-        'UPDATE stock SET version=$1,km=$2,color=$3,precio=$4,moneda=$5,estado=$6,notas=$7,updated_at=NOW() WHERE id=$8',
-        [version, Number(km)||0, color, String(precio), moneda, estado, notas, existe.rows[0].id]
+        'UPDATE stock SET version=$1,km=$2,color=$3,precio=$4,moneda=$5,estado=$6,notas=$7,ubicacion=$8,updated_at=NOW() WHERE id=$9',
+        [version, Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion, existe.rows[0].id]
       )
       res.json({ ok: true, accion: 'actualizado' })
     } else {
@@ -149,9 +149,11 @@ app.post('/api/chat', async (req, res) => {
 == GESTIÓN DE STOCK ==
 Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
 • Extraé todos los datos disponibles del mensaje
+• Si no menciona ubicación, usá "Tutu Automotores"
+• Si menciona otra agencia o lugar, usá ese nombre en ubicacion
 • Confirmá con un mensaje claro al usuario
 • Al FINAL de tu respuesta agregá EXACTAMENTE (una sola línea, sin saltos dentro del JSON):
-[GUARDAR_STOCK:{"marca":"Ford","modelo":"Ranger","version":"XLT 4x4","anio":"2022","km":45000,"color":"Blanca","precio":"58000000","moneda":"ARS","estado":"Disponible","notas":""}]
+[GUARDAR_STOCK:{"marca":"Ford","modelo":"Ranger","version":"XLT 4x4","anio":"2022","km":45000,"color":"Blanca","precio":"58000000","moneda":"ARS","estado":"Disponible","notas":"","ubicacion":"Tutu Automotores"}]
 
 Cuando el usuario diga "eliminá", "borrá" o "sacá" un auto:
 • Confirmá con un mensaje claro
@@ -190,20 +192,20 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
       if (guardar) {
         try {
           const auto = JSON.parse(guardar[1])
-          const { marca, modelo, version='', anio='', km=0, color='', precio='', moneda='ARS', estado='Disponible', notas='' } = auto
+          const { marca, modelo, version='', anio='', km=0, color='', precio='', moneda='ARS', estado='Disponible', notas='', ubicacion='Tutu Automotores' } = auto
           const existe = await pool.query(
             'SELECT id FROM stock WHERE LOWER(marca)=LOWER($1) AND LOWER(modelo)=LOWER($2) AND anio=$3',
             [marca, modelo, String(anio)]
           )
           if (existe.rows.length > 0) {
             await pool.query(
-              'UPDATE stock SET version=$1,km=$2,color=$3,precio=$4,moneda=$5,estado=$6,notas=$7,updated_at=NOW() WHERE id=$8',
-              [version, Number(km)||0, color, String(precio), moneda, estado, notas, existe.rows[0].id]
+              'UPDATE stock SET version=$1,km=$2,color=$3,precio=$4,moneda=$5,estado=$6,notas=$7,ubicacion=$8,updated_at=NOW() WHERE id=$9',
+              [version, Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion, existe.rows[0].id]
             )
           } else {
             await pool.query(
-              'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-              [marca, modelo, version, String(anio), Number(km)||0, color, String(precio), moneda, estado, notas]
+              'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+              [marca, modelo, version, String(anio), Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion]
             )
           }
           console.log('✅ Stock guardado:', marca, modelo, anio)
@@ -228,6 +230,34 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
   } catch(e) {
     res.status(500).json({ error: e.message })
   }
+})
+
+
+// ── Match: buscar autos por modelo y/o año ──────────────────
+app.get('/api/match', async (req, res) => {
+  try {
+    const { modelo, anio } = req.query
+    if (!modelo && !anio) return res.status(400).json({ error: 'Ingresá modelo y/o año' })
+    
+    let conditions = []
+    let params = []
+    let i = 1
+    
+    if (modelo) {
+      conditions.push(`(LOWER(marca) LIKE LOWER($${i}) OR LOWER(modelo) LIKE LOWER($${i}) OR LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($${i}) OR LOWER(version) LIKE LOWER($${i}))`)
+      params.push(`%${modelo}%`)
+      i++
+    }
+    if (anio) {
+      conditions.push(`anio = $${i}`)
+      params.push(String(anio))
+      i++
+    }
+    
+    const query = `SELECT * FROM stock WHERE ${conditions.join(' AND ')} ORDER BY ubicacion, marca, modelo, anio`
+    const result = await pool.query(query, params)
+    res.json(result.rows)
+  } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Comparador de precios (ML) ────────────────────────────────
