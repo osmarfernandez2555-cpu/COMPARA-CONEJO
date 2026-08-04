@@ -48,6 +48,7 @@ initDB().catch(e => console.error('DB init error:', e.message))
 console.log('=== RUTHINA SERVER ===')
 console.log('ANTHROPIC_API_KEY:', !!process.env.ANTHROPIC_API_KEY)
 console.log('DATABASE_URL:', !!process.env.DATABASE_URL)
+console.log('DATABASE_URL valor:', (process.env.DATABASE_URL||'').substring(0, 60))
 console.log('DATABASE_PRIVATE_URL:', !!process.env.DATABASE_PRIVATE_URL)
 console.log('PGHOST:', process.env.PGHOST || 'no definido')
 
