@@ -155,6 +155,11 @@ Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
 • Al FINAL de tu respuesta agregá EXACTAMENTE (una sola línea, sin saltos dentro del JSON):
 [GUARDAR_STOCK:{"marca":"Ford","modelo":"Ranger","version":"XLT 4x4","anio":"2022","km":45000,"color":"Blanca","precio":"58000000","moneda":"ARS","estado":"Disponible","notas":"","ubicacion":"Tutu Automotores"}]
 
+Cuando el usuario diga que un cliente busca un auto ("X busca", "X quiere", "X está buscando"):
+• Extraé nombre del cliente, modelo, año, teléfono si lo hay
+• Confirmá con un mensaje
+• Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":""}]
+
 Cuando el usuario diga "eliminá", "borrá" o "sacá" un auto:
 • Confirmá con un mensaje claro
 • Al FINAL agregá: [ELIMINAR_STOCK:{"marca":"Ford","modelo":"Ranger","anio":"2022"}]
@@ -257,6 +262,47 @@ app.get('/api/match', async (req, res) => {
     const query = `SELECT * FROM stock WHERE ${conditions.join(' AND ')} ORDER BY ubicacion, marca, modelo, anio`
     const result = await pool.query(query, params)
     res.json(result.rows)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+
+// ── Clientes busqueda: leer ──────────────────────────────────
+app.get('/api/clientes', async (req, res) => {
+  try {
+    const { modelo, anio } = req.query
+    let q = 'SELECT * FROM clientes_busqueda WHERE estado=$1'
+    let params = ['Buscando']
+    if (modelo) { q += ` AND (LOWER(modelo) LIKE LOWER($2) OR LOWER(marca) LIKE LOWER($2))`; params.push(`%${modelo}%`) }
+    if (anio) { q += ` AND anio=$${params.length+1}`; params.push(String(anio)) }
+    q += ' ORDER BY created_at DESC'
+    const r = await pool.query(q, params)
+    res.json(r.rows)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Clientes busqueda: guardar ───────────────────────────────
+app.post('/api/clientes', async (req, res) => {
+  try {
+    const { nombre, telefono='', marca='', modelo, anio='', presupuesto='', notas='', asesor='' } = req.body
+    if (!nombre || !modelo) return res.status(400).json({ error: 'Nombre y modelo requeridos' })
+    await pool.query(
+      'INSERT INTO clientes_busqueda (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor]
+    )
+    // Buscar si hay match en stock
+    const stockMatch = await pool.query(
+      `SELECT * FROM stock WHERE (LOWER(modelo) LIKE LOWER($1) OR LOWER(marca) LIKE LOWER($1)) ${anio ? 'AND anio=$2' : ''}`,
+      anio ? [`%${modelo}%`, String(anio)] : [`%${modelo}%`]
+    )
+    res.json({ ok: true, matches: stockMatch.rows })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Clientes busqueda: marcar encontrado ─────────────────────
+app.patch('/api/clientes/:id', async (req, res) => {
+  try {
+    await pool.query('UPDATE clientes_busqueda SET estado=$1,updated_at=NOW() WHERE id=$2', [req.body.estado||'Encontrado', req.params.id])
+    res.json({ ok: true })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
