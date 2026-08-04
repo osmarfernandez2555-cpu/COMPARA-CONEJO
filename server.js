@@ -284,8 +284,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
         system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","notas":""}]. Si el vehiculo dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
-        messages: [{ role: 'user', content: 'Parseá esta lista:
-' + texto }]
+        messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
     const data = await response.json()
