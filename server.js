@@ -326,6 +326,76 @@ app.post('/api/clientes/bulk', async (req, res) => {
   }
 })
 
+
+// ── Migración: cargar stock hardcodeado a la DB ─────────────
+app.post('/api/migrar-stock', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
+
+  const stockData = [
+    {marca:'Shineray',modelo:'M7 Pasajeros',version:'7AS MT 2.0 Nafta',anio:'2026',km:0,color:'Blanco',precio:'29300',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'M7 Pasajeros',version:'9AS MT 2.0 Nafta',anio:'2026',km:0,color:'Blanco',precio:'29400',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'M7 Furgon',version:'MT 2.0 Nafta',anio:'2026',km:0,color:'Blanco',precio:'23700',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'M7 Pasajeros',version:'11AS',anio:'2026',km:0,color:'Blanco',precio:'29700',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'G03F',version:'1.5 AUT Hibrida SUV 7AS',anio:'2026',km:0,color:'Blanco',precio:'24200',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'SWM G03F',version:'1.5 MT Nafta 108HP',anio:'2026',km:0,color:'Negro/Gris',precio:'24200',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'T30',version:'1.6 Cabina Simple',anio:'2026',km:0,color:'Blanco',precio:'23600',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'T30 Box Refrigerado',version:'1.6',anio:'2026',km:0,color:'Blanco',precio:'35600',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Shineray',modelo:'X30 L EV',version:'Electrica 7AS',anio:'2026',km:0,color:'Blanco',precio:'24600',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'Grand Avenue',version:'GL MT 4x2 Nafta 241HP',anio:'2026',km:0,color:'Varios',precio:'28300',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'Grand Avenue',version:'GL AT 4x2 Nafta 241HP',anio:'2026',km:0,color:'Varios',precio:'31100',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'Grand Avenue',version:'GL MT 4x4 Diesel Puma 174HP',anio:'2026',km:0,color:'Gris Azulada',precio:'37500',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'Grand Avenue',version:'GL AT 4x4 Diesel Puma 174HP',anio:'2026',km:0,color:'Negro/Gris',precio:'41300',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'Grand Avenue',version:'GL AT 4x4 Nafta Off Road',anio:'2026',km:0,color:'Amarillo',precio:'44700',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'Grand Avenue',version:'SLX AT 4x4 Nafta 241HP',anio:'2026',km:0,color:'Blanco/Negro',precio:'45800',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'Grand Avenue PRO',version:'DADAO 252HP',anio:'2026',km:0,color:'Rojo/Negro',precio:'54200',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'JMC',modelo:'N900',version:'Camion 4000kg Ind.Arg',anio:'2025',km:0,color:'Blanco',precio:'41500',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Domy',modelo:'K2',version:'C/D 1.5 Cabina Doble',anio:'2026',km:0,color:'Blanco',precio:'19900',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Domy',modelo:'Victory Furgon',version:'V1 1.5 104HP',anio:'2026',km:0,color:'Blanco',precio:'19900',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Chevrolet',modelo:'Cruze',version:'5P 1.4 Turbo LT MT',anio:'2018',km:73900,color:'Blanco',precio:'21500000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Chevrolet',modelo:'Tracker',version:'1.2T AT',anio:'2025',km:15000,color:'Gris',precio:'35500000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Ford',modelo:'Bronco Sport',version:'Wildtrak 2.0L AT',anio:'2022',km:73500,color:'Blanco',precio:'55000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Ford',modelo:'Ranger',version:'3.0 TDI DC 4x4 LTD+ V6 10AT',anio:'2024',km:39000,color:'Naranja',precio:'71000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Toyota',modelo:'Hilux',version:'DC 4x4 SRX AT 2.8 TDI',anio:'2022',km:76500,color:'Blanco',precio:'60000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Toyota',modelo:'RAV4',version:'2.5 Hibrido Sport',anio:'2023',km:19000,color:'Gris',precio:'72000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Toyota',modelo:'Corolla Cross',version:'XEI 2.0',anio:'2023',km:38000,color:'Blanco',precio:'51000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Toyota',modelo:'Hilux',version:'DC 4x4 SRV AT 2.8 TDI',anio:'2021',km:108000,color:'Plata',precio:'52000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Volkswagen',modelo:'Amarok',version:'2.0 TDI 4x4 Highline AT',anio:'2019',km:113000,color:'Gris',precio:'52000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Ford',modelo:'Ranger Raptor',version:'2.0L BIT 4x4 10AT',anio:'2022',km:91700,color:'Azul',precio:'65000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Peugeot',modelo:'3008',version:'Allure Plus 1.6T AT8',anio:'2022',km:48000,color:'Blanco',precio:'47000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Jeep',modelo:'Compass',version:'Sport 1.3T DCT',anio:'2022',km:65000,color:'Gris',precio:'42000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Jeep',modelo:'Renegade',version:'Longitude 1.8 AT',anio:'2022',km:44000,color:'Blanco',precio:'36000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Honda',modelo:'HRV',version:'LX CVT',anio:'2017',km:130000,color:'Blanco',precio:'26000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Mini',modelo:'Cooper',version:'1.5 3P S',anio:'2019',km:50000,color:'Negro',precio:'35000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Renault',modelo:'Koleos',version:'Bose 2.5 CVT 4WD',anio:'2018',km:100000,color:'Gris Plata',precio:'32000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Citroen',modelo:'C3 Aircross',version:'T200 Shine 7 MY24',anio:'2024',km:38500,color:'Gris Bitono',precio:'30500000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Hyundai',modelo:'H1',version:'2.5 CRDI 12 Pasajeros',anio:'2016',km:163400,color:'Gris Topo',precio:'31500',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Ford',modelo:'Ranger',version:'DC 4x4 XLT AT 3.2L D',anio:'2019',km:169000,color:'Gris Oscuro',precio:'37000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Chevrolet',modelo:'S10',version:'2.8 TD 4x2 LS MT',anio:'2020',km:76000,color:'Gris Plata',precio:'35000000',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Chrysler',modelo:'Town & Country',version:'Limited 3.6',anio:'2012',km:150000,color:'Gris Plata',precio:'26000000',moneda:'ARS',notas:'Blindado',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Fiat',modelo:'Cronos',version:'Like 1.3 GSE BZ',anio:'2026',km:0,color:'Gris Plata',precio:'33207820',moneda:'ARS',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Dodge',modelo:'RAM 1500',version:'5.7 V8 Laramie 4x4',anio:'2015',km:99000,color:'Negro',precio:'33300',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+    {marca:'Iveco',modelo:'Daily',version:'55C16 Paso 3750',anio:'2013',km:220000,color:'Blanco',precio:'75000',moneda:'USD',estado:'Disponible',ubicacion:'Tutu Automotores'},
+  ]
+
+  let guardados = 0, errores = 0, saltados = 0
+  for (const a of stockData) {
+    try {
+      const existe = await pool.query(
+        'SELECT id FROM stock WHERE LOWER(marca)=LOWER($1) AND LOWER(modelo)=LOWER($2) AND anio=$3',
+        [a.marca, a.modelo, String(a.anio)]
+      )
+      if (existe.rows.length > 0) { saltados++; continue }
+      await pool.query(
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [a.marca, a.modelo, a.version||'', String(a.anio), Number(a.km)||0, a.color||'', String(a.precio), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', a.ubicacion||'Tutu Automotores']
+      )
+      guardados++
+    } catch(e) { errores++; console.error('Error migrando:', a.marca, a.modelo, e.message) }
+  }
+  res.json({ ok: true, guardados, saltados, errores, total: stockData.length })
+})
+
 // ── Clientes busqueda: leer ──────────────────────────────────
 app.get('/api/clientes', async (req, res) => {
   try {
