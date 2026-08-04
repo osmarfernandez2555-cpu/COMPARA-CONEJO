@@ -249,9 +249,15 @@ app.get('/api/match', async (req, res) => {
     let i = 1
     
     if (modelo) {
-      conditions.push(`(LOWER(marca) LIKE LOWER($${i}) OR LOWER(modelo) LIKE LOWER($${i}) OR LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($${i}) OR LOWER(version) LIKE LOWER($${i}))`)
-      params.push(`%${modelo}%`)
-      i++
+      // Buscar con cada palabra del modelo
+      const palabras = modelo.split(/\s+/).filter(p => p.length >= 2)
+      const subconds = palabras.map((p, j) => {
+        const idx = i + j
+        params.push(`%${p}%`)
+        return `(LOWER(marca) LIKE LOWER($${idx}) OR LOWER(modelo) LIKE LOWER($${idx}) OR LOWER(version) LIKE LOWER($${idx}) OR LOWER(CONCAT(marca,' ',modelo,' ',COALESCE(version,''))) LIKE LOWER($${idx}))`
+      })
+      conditions.push('(' + subconds.join(' OR ') + ')')
+      i += palabras.length
     }
     if (anio) {
       conditions.push(`anio = $${i}`)
@@ -311,12 +317,21 @@ app.post('/api/clientes/bulk', async (req, res) => {
     const conModelo = clientes.filter(c => c.modelo && c.modelo.length > 2)
     let matches = []
     for (const c of conModelo) {
-      const r = await pool.query(
-        'SELECT marca,modelo,version,anio,precio,moneda,ubicacion FROM stock WHERE LOWER(modelo) LIKE LOWER($1)',
-        [`%${c.modelo.split(' ')[0]}%`]
-      )
-      if (r.rows.length > 0) {
-        matches.push({ cliente: c.nombre, busca: c.modelo, autos: r.rows })
+      // Buscar con cada palabra clave del modelo (min 2 chars)
+      const palabras = c.modelo.split(/\s+/).filter(p => p.length >= 2)
+      let rows = []
+      for (const palabra of palabras) {
+        const r = await pool.query(
+          `SELECT * FROM stock WHERE LOWER(marca) LIKE LOWER($1) OR LOWER(modelo) LIKE LOWER($1) OR LOWER(version) LIKE LOWER($1) OR LOWER(CONCAT(marca,' ',modelo,' ',COALESCE(version,''))) LIKE LOWER($1)`,
+          [`%${palabra}%`]
+        )
+        // Agregar los que no están ya
+        for (const row of r.rows) {
+          if (!rows.find(x => x.id === row.id)) rows.push(row)
+        }
+      }
+      if (rows.length > 0) {
+        matches.push({ cliente: c.nombre, busca: c.modelo, autos: rows })
       }
     }
 
@@ -402,7 +417,14 @@ app.get('/api/clientes', async (req, res) => {
     const { modelo, anio } = req.query
     let q = 'SELECT * FROM clientes_busqueda WHERE estado=$1'
     let params = ['Buscando']
-    if (modelo) { q += ` AND (LOWER(modelo) LIKE LOWER($2) OR LOWER(marca) LIKE LOWER($2))`; params.push(`%${modelo}%`) }
+    if (modelo) {
+      const palabrasC = modelo.split(/\s+/).filter(p => p.length >= 2)
+      const subconds2 = palabrasC.map((p, j) => {
+        params.push(`%${p}%`)
+        return `(LOWER(modelo) LIKE LOWER($${params.length}) OR LOWER(marca) LIKE LOWER($${params.length}))`
+      })
+      q += ' AND (' + subconds2.join(' OR ') + ')'
+    }
     if (anio) { q += ` AND anio=$${params.length+1}`; params.push(String(anio)) }
     q += ' ORDER BY created_at DESC'
     const r = await pool.query(q, params)
