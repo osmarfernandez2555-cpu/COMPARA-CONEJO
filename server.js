@@ -244,29 +244,14 @@ app.get('/api/match', async (req, res) => {
     const { modelo, anio } = req.query
     if (!modelo && !anio) return res.status(400).json({ error: 'Ingresá modelo y/o año' })
     
-    let conditions = []
-    let params = []
-    let i = 1
-    
     if (modelo) {
-      // Buscar con cada palabra del modelo
-      const palabras = modelo.split(/\s+/).filter(p => p.length >= 2)
-      const subconds = palabras.map((p, j) => {
-        const idx = i + j
-        params.push(`%${p}%`)
-        return `(LOWER(marca) LIKE LOWER($${idx}) OR LOWER(modelo) LIKE LOWER($${idx}) OR LOWER(version) LIKE LOWER($${idx}) OR LOWER(CONCAT(marca,' ',modelo,' ',COALESCE(version,''))) LIKE LOWER($${idx}))`
-      })
-      conditions.push('(' + subconds.join(' OR ') + ')')
-      i += palabras.length
-    }
-    if (anio) {
-      conditions.push(`anio = $${i}`)
-      params.push(String(anio))
-      i++
+      const stockRows = await buscarEnStock(modelo)
+      const filtered = anio ? stockRows.filter(r => r.anio === String(anio)) : stockRows
+      return res.json(filtered)
     }
     
-    const query = `SELECT * FROM stock WHERE ${conditions.join(' AND ')} ORDER BY ubicacion, marca, modelo, anio`
-    const result = await pool.query(query, params)
+    // Solo año
+    const result = await pool.query('SELECT * FROM stock WHERE anio=$1 ORDER BY marca, modelo', [String(anio)])
     res.json(result.rows)
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
@@ -317,19 +302,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
     const conModelo = clientes.filter(c => c.modelo && c.modelo.length > 2)
     let matches = []
     for (const c of conModelo) {
-      // Buscar con cada palabra clave del modelo (min 2 chars)
-      const palabras = c.modelo.split(/\s+/).filter(p => p.length >= 2)
-      let rows = []
-      for (const palabra of palabras) {
-        const r = await pool.query(
-          `SELECT * FROM stock WHERE LOWER(marca) LIKE LOWER($1) OR LOWER(modelo) LIKE LOWER($1) OR LOWER(version) LIKE LOWER($1) OR LOWER(CONCAT(marca,' ',modelo,' ',COALESCE(version,''))) LIKE LOWER($1)`,
-          [`%${palabra}%`]
-        )
-        // Agregar los que no están ya
-        for (const row of r.rows) {
-          if (!rows.find(x => x.id === row.id)) rows.push(row)
-        }
-      }
+      const rows = await buscarEnStock(c.modelo)
       if (rows.length > 0) {
         matches.push({ cliente: c.nombre, busca: c.modelo, autos: rows })
       }
@@ -341,6 +314,36 @@ app.post('/api/clientes/bulk', async (req, res) => {
   }
 })
 
+
+
+// ── Función centralizada de búsqueda inteligente ────────────
+async function buscarEnStock(texto) {
+  if (!texto || texto.length < 2) return []
+  
+  // Palabras a ignorar
+  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo','precision','expression','allure','sport','style','luxury','advance','comfort','trendline','highline','comfortline'])
+  
+  // Extraer palabras clave (marca/modelo son las más importantes)
+  const palabras = texto.split(/\s+/)
+    .filter(p => p.length >= 3 && !stopWords.has(p.toLowerCase()) && isNaN(p))
+  
+  if (palabras.length === 0) return []
+  
+  // Primero intentar búsqueda exacta de las 2 primeras palabras juntas
+  const termPrincipal = palabras.slice(0, 2).join(' ')
+  const r1 = await pool.query(
+    `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1) OR LOWER(modelo) LIKE LOWER($1)`,
+    [`%${termPrincipal}%`]
+  )
+  if (r1.rows.length > 0) return r1.rows
+  
+  // Si no, buscar por la primera palabra más significativa
+  const r2 = await pool.query(
+    `SELECT * FROM stock WHERE LOWER(marca) LIKE LOWER($1) OR LOWER(modelo) LIKE LOWER($1)`,
+    [`%${palabras[0]}%`]
+  )
+  return r2.rows
+}
 
 // ── Migración: cargar stock hardcodeado a la DB ─────────────
 app.post('/api/migrar-stock', async (req, res) => {
@@ -418,12 +421,12 @@ app.get('/api/clientes', async (req, res) => {
     let q = 'SELECT * FROM clientes_busqueda WHERE estado=$1'
     let params = ['Buscando']
     if (modelo) {
-      const palabrasC = modelo.split(/\s+/).filter(p => p.length >= 2)
-      const subconds2 = palabrasC.map((p, j) => {
-        params.push(`%${p}%`)
-        return `(LOWER(modelo) LIKE LOWER($${params.length}) OR LOWER(marca) LIKE LOWER($${params.length}))`
-      })
-      q += ' AND (' + subconds2.join(' OR ') + ')'
+      // Buscar clientes que tengan alguna palabra clave del modelo buscado
+      const pals = modelo.split(/\s+/).filter(p => p.length >= 3 && !['con','los','las','del','una','por'].includes(p.toLowerCase()))
+      if (pals.length > 0) {
+        const subs = pals.map((p, j) => { params.push(`%${p}%`); return `LOWER(modelo) LIKE LOWER($${params.length})` })
+        q += ' AND (' + subs.join(' OR ') + ')'
+      }
     }
     if (anio) { q += ` AND anio=$${params.length+1}`; params.push(String(anio)) }
     q += ' ORDER BY created_at DESC'
