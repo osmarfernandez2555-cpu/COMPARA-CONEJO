@@ -546,7 +546,7 @@ async function buscarMatchesClientes(autos) {
 app.get('/api/clientes', async (req, res) => {
   try {
     const { modelo, anio } = req.query
-    let q = 'SELECT * FROM clientes_busqueda WHERE estado=$1'
+    let q = 'SELECT DISTINCT ON (nombre, telefono) * FROM clientes_busqueda WHERE estado=$1 ORDER BY nombre, telefono, created_at DESC'
     let params = ['Buscando']
     if (modelo) {
       // Buscar clientes que tengan alguna palabra clave del modelo buscado
