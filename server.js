@@ -546,18 +546,17 @@ async function buscarMatchesClientes(autos) {
 app.get('/api/clientes', async (req, res) => {
   try {
     const { modelo, anio } = req.query
-    let q = 'SELECT DISTINCT ON (nombre, telefono) * FROM clientes_busqueda WHERE estado=$1 ORDER BY nombre, telefono, created_at DESC'
+    let where = ['estado=$1']
     let params = ['Buscando']
     if (modelo) {
-      // Buscar clientes que tengan alguna palabra clave del modelo buscado
       const pals = modelo.split(/\s+/).filter(p => p.length >= 3 && !['con','los','las','del','una','por'].includes(p.toLowerCase()))
       if (pals.length > 0) {
-        const subs = pals.map((p, j) => { params.push(`%${p}%`); return `LOWER(modelo) LIKE LOWER($${params.length})` })
-        q += ' AND (' + subs.join(' OR ') + ')'
+        const subs = pals.map(p => { params.push('%'+p+'%'); return 'LOWER(modelo) LIKE LOWER($'+params.length+')' })
+        where.push('('+subs.join(' OR ')+')')
       }
     }
-    if (anio) { q += ` AND anio=$${params.length+1}`; params.push(String(anio)) }
-    q += ' ORDER BY created_at DESC'
+    if (anio) { params.push(String(anio)); where.push('anio=$'+params.length) }
+    const q = 'SELECT DISTINCT ON (LOWER(nombre), LOWER(telefono)) * FROM clientes_busqueda WHERE '+where.join(' AND ')+' ORDER BY LOWER(nombre), LOWER(telefono), created_at DESC'
     const r = await pool.query(q, params)
     res.json(r.rows)
   } catch(e) { res.status(500).json({ error: e.message }) }
