@@ -150,9 +150,9 @@ app.post('/api/chat', async (req, res) => {
       const lineas = stock.map(a =>
         `• ${a.marca} ${a.modelo}${a.version ? ' '+a.version : ''} ${a.anio} | ` +
         `KM: ${Number(a.km).toLocaleString('es-AR')} | Color: ${a.color||'-'} | ` +
-        `Precio: ${a.precio} ${a.moneda} | Estado: ${a.estado}${a.notas ? ' | '+a.notas : ''}`
+        `Precio: ${a.precio} ${a.moneda} | Ubicación: ${a.ubicacion||'Tutu Automotores'} | Estado: ${a.estado}${a.notas ? ' | '+a.notas : ''}`
       ).join('\n')
-      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==`
+      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==\n\nIMPORTANTE: Siempre indicá la Ubicación de cada auto cuando lo mencionés. Si la ubicación no es "Tutu Automotores" aclaralo bien para que el vendedor sepa dónde está el auto.`
     }
 
     const comandos = `
