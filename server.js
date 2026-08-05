@@ -414,6 +414,120 @@ app.post('/api/migrar-stock', async (req, res) => {
   res.json({ ok: true, guardados, saltados, errores, total: stockData.length })
 })
 
+
+// ── Stock: carga masiva desde texto ─────────────────────────
+app.post('/api/stock/bulk', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
+  const { texto, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
+  if (!texto) return res.status(400).json({ error: 'Texto requerido' })
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        system: `Sos un parser de listas de autos usados. Extraés los datos de cualquier formato (tabla, texto, lista) y devolvés SOLO un JSON array sin texto extra ni markdown.
+Formato de cada auto: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km":225000,"color":"Blanco","precio":"11100000","moneda":"${moneda}","estado":"Disponible","notas":""}
+- Extraé todos los autos que puedas
+- Si el precio tiene $ o USD, convertilo a número limpio
+- Si no hay versión, dejá string vacío
+- moneda: usá "${moneda}" salvo que el precio diga explícitamente USD o ARS
+- SOLO el array JSON, sin explicaciones`,
+        messages: [{ role: 'user', content: 'Parseá esta lista de autos:\n' + texto }]
+      })
+    })
+    const data = await response.json()
+    let raw = data.content?.[0]?.text || '[]'
+    raw = raw.replace(/\`\`\`json|\`\`\`/g, '').trim()
+    const match = raw.match(/\[[\s\S]*\]/)
+    if (!match) return res.status(400).json({ error: 'No se pudo parsear la lista' })
+    const autos = JSON.parse(match[0])
+    const result = await guardarAutosEnDB(autos, ubicacion)
+    const matches = await buscarMatchesClientes(autos)
+    res.json({ ...result, matches })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Stock: carga desde PDF ────────────────────────────────────
+app.post('/api/stock/bulk-pdf', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
+  const { pdf, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
+  if (!pdf) return res.status(400).json({ error: 'PDF requerido' })
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        system: `Sos un parser de PDFs de autos usados. Extraés todos los vehículos del documento y devolvés SOLO un JSON array sin texto extra ni markdown.
+Formato: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km":225000,"color":"Blanco","precio":"11100000","moneda":"${moneda}","estado":"Disponible","notas":""}
+- Extraé TODOS los autos del PDF
+- Convertí precios a número limpio sin $ ni puntos
+- moneda: "${moneda}" salvo que diga explícitamente USD
+- SOLO el array JSON`,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } },
+            { type: 'text', text: 'Extraé todos los autos de este PDF y devolvé el JSON array.' }
+          ]
+        }]
+      })
+    })
+    const data = await response.json()
+    let raw = data.content?.[0]?.text || '[]'
+    raw = raw.replace(/\`\`\`json|\`\`\`/g, '').trim()
+    const match = raw.match(/\[[\s\S]*\]/)
+    if (!match) return res.status(400).json({ error: 'No se encontraron autos en el PDF' })
+    const autos = JSON.parse(match[0])
+    const result = await guardarAutosEnDB(autos, ubicacion)
+    const matches = await buscarMatchesClientes(autos)
+    res.json({ ...result, matches })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Helpers compartidos ──────────────────────────────────────
+async function guardarAutosEnDB(autos, ubicacion) {
+  let guardados = 0, saltados = 0, errores = 0
+  for (const a of autos) {
+    if (!a.marca || !a.modelo) { errores++; continue }
+    try {
+      const existe = await pool.query(
+        'SELECT id FROM stock WHERE LOWER(marca)=LOWER($1) AND LOWER(modelo)=LOWER($2) AND anio=$3 AND LOWER(ubicacion)=LOWER($4)',
+        [a.marca, a.modelo, String(a.anio||''), ubicacion]
+      )
+      if (existe.rows.length > 0) { saltados++; continue }
+      await pool.query(
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [a.marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion]
+      )
+      guardados++
+    } catch(e) { errores++; console.error('Error guardando auto:', e.message) }
+  }
+  return { guardados, saltados, errores }
+}
+
+async function buscarMatchesClientes(autos) {
+  const matches = []
+  for (const a of autos) {
+    if (!a.modelo) continue
+    const r = await pool.query(
+      `SELECT nombre, modelo FROM clientes_busqueda WHERE estado='Buscando' AND LOWER(modelo) LIKE LOWER($1)`,
+      [`%${a.modelo.split(' ')[0]}%`]
+    )
+    for (const c of r.rows) {
+      if (!matches.find(m => m.cliente === c.nombre && m.busca === c.modelo)) {
+        matches.push({ cliente: c.nombre, busca: c.modelo })
+      }
+    }
+  }
+  return matches
+}
+
 // ── Clientes busqueda: leer ──────────────────────────────────
 app.get('/api/clientes', async (req, res) => {
   try {
