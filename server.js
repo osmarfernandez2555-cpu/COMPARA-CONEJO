@@ -111,6 +111,17 @@ app.post('/api/stock', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
+
+// ── Stock: eliminar por ID ───────────────────────────────────
+app.delete('/api/stock/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const r = await pool.query('DELETE FROM stock WHERE id=$1 RETURNING id', [parseInt(id)])
+    if (r.rowCount === 0) return res.status(404).json({ error: 'Auto no encontrado' })
+    res.json({ ok: true, id })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Stock: eliminar ──────────────────────────────────────────
 app.delete('/api/stock', async (req, res) => {
   try {
