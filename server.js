@@ -292,10 +292,10 @@ app.post('/api/clientes/bulk', async (req, res) => {
     const data = await response.json()
     let raw = data.content?.[0]?.text || '[]'
     raw = raw.replace(/```json|```/g, '').trim()
-    const match = raw.match(/\[[\s\S]*\]/)
-    if (!match) return res.status(400).json({ error: 'No se pudo parsear la lista' })
-    
-    const clientes = JSON.parse(match[0])
+    let clientes = []
+    try {
+      clientes = raw.startsWith('[') ? JSON.parse(raw) : JSON.parse((raw.match(/\[[\s\S]*\]/) || ['[]'])[0])
+    } catch(e) { return res.status(400).json({ error: 'No se pudo parsear la lista' }) }
     let guardados = 0, errores = 0
 
     for (const c of clientes) {
@@ -452,11 +452,14 @@ Formato de cada auto: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio
     const data = await response.json()
     if (data.error) return res.status(400).json({ error: data.error.message || JSON.stringify(data.error) })
     let raw = data.content?.[0]?.text || '[]'
-    console.log('RAW RESPUESTA (primeros 300):', raw.substring(0, 300))
     raw = raw.replace(/```json|```/g, '').trim()
-    const matchArr = raw.match(/\[[\s\S]*\]/)
-    if (!matchArr) return res.status(400).json({ error: 'No se encontró JSON array. Respuesta: ' + raw.substring(0, 200) })
-    const autos = JSON.parse(matchArr[0])
+    let autos = []
+    try {
+      const t = raw.trim()
+      autos = t.startsWith('[') ? JSON.parse(t) : JSON.parse((t.match(/\[[\s\S]*\]/) || ['[]'])[0])
+    } catch(e) {
+      return res.status(400).json({ error: 'JSON inválido: ' + e.message + ' — ' + raw.substring(0, 200) })
+    }
     console.log('Autos parseados:', autos.length)
     const result = await guardarAutosEnDB(autos, ubicacion)
     const matches = await buscarMatchesClientes(autos)
@@ -494,10 +497,19 @@ Formato: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km"
     })
     const data = await response.json()
     let raw = data.content?.[0]?.text || '[]'
-    raw = raw.replace(/\`\`\`json|\`\`\`/g, '').trim()
-    const match = raw.match(/\[[\s\S]*\]/)
-    if (!match) return res.status(400).json({ error: 'No se encontraron autos en el PDF' })
-    const autos = JSON.parse(match[0])
+    raw = raw.replace(/```json|```/g, '').trim()
+    let autos = []
+    try {
+      if (raw.startsWith('[')) {
+        autos = JSON.parse(raw)
+      } else {
+        const matchArr = raw.match(/\[[\s\S]*\]/)
+        if (!matchArr) return res.status(400).json({ error: 'No se encontraron autos en el PDF' })
+        autos = JSON.parse(matchArr[0])
+      }
+    } catch(e) {
+      return res.status(400).json({ error: 'JSON inválido en PDF: ' + e.message })
+    }
     const result = await guardarAutosEnDB(autos, ubicacion)
     const matches = await buscarMatchesClientes(autos)
     res.json({ ...result, matches })
