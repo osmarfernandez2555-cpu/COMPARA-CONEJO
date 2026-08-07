@@ -426,46 +426,46 @@ app.post('/api/migrar-stock', async (req, res) => {
 })
 
 
-// ── Stock: carga masiva desde texto ─────────────────────────
+// ── Stock: carga masiva desde texto (con chunking) ──────────
 app.post('/api/stock/bulk', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
   const { texto, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
   if (!texto) return res.status(400).json({ error: 'Texto requerido' })
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
-        system: `Sos un parser de listas de autos usados. Extraés los datos de cualquier formato (tabla, texto, lista) y devolvés SOLO un JSON array sin texto extra ni markdown.
-Formato de cada auto: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km":225000,"color":"Blanco","precio":"11100000","moneda":"${moneda}","estado":"Disponible","notas":""}
-- Extraé todos los autos que puedas
-- Si el precio tiene $ o USD, convertilo a número limpio
-- Si no hay versión, dejá string vacío
-- moneda: usá "${moneda}" salvo que el precio diga explícitamente USD o ARS
-- SOLO el array JSON, sin explicaciones`,
-        messages: [{ role: 'user', content: 'Parseá esta lista de autos:\n' + texto }]
+    // Dividir en líneas y procesar en grupos de 30 autos
+    const lineas = texto.split('\n').filter(l => l.trim())
+    const CHUNK_SIZE = 30
+    let todosLosAutos = []
+
+    for (let i = 0; i < lineas.length; i += CHUNK_SIZE) {
+      const chunk = lineas.slice(i, i + CHUNK_SIZE).join('\n')
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8000,
+          system: 'Sos un parser de autos. Extraé los datos y devolvé SOLO un JSON array válido y completo. Cada auto: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km":225000,"color":"Blanco","precio":"11100000","moneda":"' + moneda + '","estado":"Disponible","notas":""}. Precio sin $ ni puntos. SOLO el array JSON.',
+          messages: [{ role: 'user', content: 'Parsea estos autos:\n' + chunk }]
+        })
       })
-    })
-    const data = await response.json()
-    if (data.error) return res.status(400).json({ error: data.error.message || JSON.stringify(data.error) })
-    let raw = data.content?.[0]?.text || '[]'
-    raw = raw.replace(/```json|```/g, '').trim()
-    let autos = []
-    try {
-      const t = raw.trim()
-      autos = t.startsWith('[') ? JSON.parse(t) : JSON.parse((t.match(/\[[\s\S]*\]/) || ['[]'])[0])
-    } catch(e) {
-      return res.status(400).json({ error: 'JSON inválido: ' + e.message + ' — ' + raw.substring(0, 200) })
+      const data = await response.json()
+      if (data.error) { console.error('API error en chunk:', data.error.message); continue }
+      let raw = (data.content?.[0]?.text || '[]').replace(/```json|```/g, '').trim()
+      try {
+        const parsed = raw.startsWith('[') ? JSON.parse(raw) : JSON.parse((raw.match(/\[[\s\S]*\]/) || ['[]'])[0])
+        todosLosAutos = todosLosAutos.concat(parsed)
+      } catch(e) { console.error('Parse error en chunk:', e.message, raw.substring(0, 100)) }
     }
-    console.log('Autos parseados:', autos.length)
-    const result = await guardarAutosEnDB(autos, ubicacion)
-    const matches = await buscarMatchesClientes(autos)
+
+    console.log('Total autos parseados:', todosLosAutos.length)
+    const result = await guardarAutosEnDB(todosLosAutos, ubicacion)
+    const matches = await buscarMatchesClientes(todosLosAutos)
     res.json({ ...result, matches })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
+
 
 // ── Stock: carga desde PDF ────────────────────────────────────
 app.post('/api/stock/bulk-pdf', async (req, res) => {
