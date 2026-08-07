@@ -152,10 +152,25 @@ app.post('/api/chat', async (req, res) => {
         `KM: ${Number(a.km).toLocaleString('es-AR')} | Color: ${a.color||'-'} | ` +
         `Precio: ${a.precio} ${a.moneda} | Ubicación: ${a.ubicacion||'Tutu Automotores'} | Estado: ${a.estado}${a.notas ? ' | '+a.notas : ''}`
       ).join('\n')
-      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==\n\nIMPORTANTE: Siempre indicá la Ubicación de cada auto cuando lo mencionés. Si la ubicación no es "Tutu Automotores" aclaralo bien para que el vendedor sepa dónde está el auto.`
+      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==\n\nIMPORTANTE: Siempre indicá la Ubicación de cada auto. NUNCA uses tablas markdown. Listá cada auto en una línea con formato: Marca Modelo Versión Año — KM: X — Precio: $ X — Ubicación: X`
     }
 
     const comandos = `
+
+== FORMATO DE RESPUESTAS ==
+NUNCA uses tablas markdown (| col | col |). Cuando listes autos usá SIEMPRE este formato numerado:
+
+1. Toyota Etios XLS 1.5 | 2015
+- KM: 141.771 | Color: Gris
+- Precio: $14.500.000 ARS
+- 📍 Ubicación: Mediterráneo
+
+2. Toyota Hilux SRX 4x4 AT 2.8 | 2022
+- KM: 76.500 | Color: Blanco
+- Precio: $60.000.000 ARS
+- 📍 Ubicación: Tutu Automotores
+
+Siempre incluí la Ubicación en cada auto. Si no hay ubicación conocida, poné "Tutu Automotores".
 
 == GESTIÓN DE STOCK ==
 Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
