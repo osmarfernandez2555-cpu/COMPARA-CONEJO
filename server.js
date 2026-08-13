@@ -346,29 +346,46 @@ app.post('/api/clientes/bulk', async (req, res) => {
 async function buscarEnStock(texto) {
   if (!texto || texto.length < 2) return []
   
-  // Palabras a ignorar
-  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo','precision','expression','allure','sport','style','luxury','advance','comfort','trendline','highline','comfortline'])
+  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo'])
   
-  // Extraer palabras clave (marca/modelo son las más importantes)
   const palabras = texto.split(/\s+/)
-    .filter(p => p.length >= 3 && !stopWords.has(p.toLowerCase()) && isNaN(p))
+    .filter(p => p.length >= 2 && !stopWords.has(p.toLowerCase()) && isNaN(p))
   
   if (palabras.length === 0) return []
-  
-  // Primero intentar búsqueda exacta de las 2 primeras palabras juntas
-  const termPrincipal = palabras.slice(0, 2).join(' ')
-  const r1 = await pool.query(
-    `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1) OR LOWER(modelo) LIKE LOWER($1)`,
-    [`%${termPrincipal}%`]
+
+  // 1. Búsqueda exacta del texto completo contra marca+modelo
+  const textoLimpio = palabras.join(' ')
+  const r0 = await pool.query(
+    `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1)`,
+    [`%${textoLimpio}%`]
   )
-  if (r1.rows.length > 0) return r1.rows
-  
-  // Si no, buscar por la primera palabra más significativa
-  const r2 = await pool.query(
-    `SELECT * FROM stock WHERE LOWER(marca) LIKE LOWER($1) OR LOWER(modelo) LIKE LOWER($1)`,
+  if (r0.rows.length > 0) return r0.rows
+
+  // 2. Si hay 2+ palabras: buscar que TODAS las palabras aparezcan en marca+modelo
+  if (palabras.length >= 2) {
+    let whereClause = palabras.map((_, i) => 
+      `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
+    ).join(' AND ')
+    const params = palabras.map(p => `%${p}%`)
+    const r1 = await pool.query(`SELECT * FROM stock WHERE ${whereClause} ORDER BY marca, modelo`, params)
+    if (r1.rows.length > 0) return r1.rows
+  }
+
+  // 3. Solo si hay 1 palabra: buscar por modelo exacto (no por marca sola)
+  if (palabras.length === 1) {
+    const r2 = await pool.query(
+      `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
+      [`%${palabras[0]}%`]
+    )
+    return r2.rows
+  }
+
+  // 4. Fallback: primera palabra solo en modelo (nunca en marca sola)
+  const r3 = await pool.query(
+    `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
     [`%${palabras[0]}%`]
   )
-  return r2.rows
+  return r3.rows
 }
 
 // ── Migración: cargar stock hardcodeado a la DB ─────────────
