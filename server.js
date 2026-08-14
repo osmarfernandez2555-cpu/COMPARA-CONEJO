@@ -41,6 +41,9 @@ async function initDB() {
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `)
+  // Agregar columnas nuevas si no existen
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -627,8 +630,59 @@ app.post('/api/clientes', async (req, res) => {
 // ── Clientes busqueda: marcar encontrado ─────────────────────
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
-    await pool.query('UPDATE clientes_busqueda SET estado=$1,updated_at=NOW() WHERE id=$2', [req.body.estado||'Encontrado', req.params.id])
+    const { estado, vendedor, calificacion } = req.body
+    const sets = []
+    const params = []
+    if (estado !== undefined) { params.push(estado); sets.push('estado=$'+params.length) }
+    if (vendedor !== undefined) { params.push(vendedor); sets.push('vendedor=$'+params.length) }
+    if (calificacion !== undefined) { params.push(calificacion); sets.push('calificacion=$'+params.length) }
+    if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
+    params.push(req.params.id)
+    sets.push('updated_at=NOW()')
+    await pool.query('UPDATE clientes_busqueda SET '+sets.join(',')+' WHERE id=$'+params.length, params)
     res.json({ ok: true })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Dashboard por vendedor ────────────────────────────────────
+app.get('/api/dashboard/vendedores', async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT 
+        COALESCE(NULLIF(vendedor,''), 'Sin asignar') as vendedor,
+        COUNT(*) as total,
+        SUM(CASE WHEN calificacion = 'sirve' THEN 1 ELSE 0 END) as sirve,
+        SUM(CASE WHEN calificacion = 'no_sirve' THEN 1 ELSE 0 END) as no_sirve,
+        SUM(CASE WHEN calificacion = '' OR calificacion IS NULL THEN 1 ELSE 0 END) as sin_calificar,
+        SUM(CASE WHEN estado = 'Encontrado' THEN 1 ELSE 0 END) as encontrados
+      FROM clientes_busqueda
+      WHERE estado IN ('Buscando', 'Encontrado')
+      GROUP BY COALESCE(NULLIF(vendedor,''), 'Sin asignar')
+      ORDER BY total DESC
+    `)
+    res.json(r.rows)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Clientes por vendedor ─────────────────────────────────────
+app.get('/api/dashboard/vendedores/:vendedor', async (req, res) => {
+  try {
+    const v = req.params.vendedor === 'Sin asignar' ? '' : req.params.vendedor
+    const { calificacion } = req.query
+    let where = ["estado IN ('Buscando','Encontrado')"]
+    const params = []
+    if (v === '') {
+      where.push("(vendedor='' OR vendedor IS NULL)")
+    } else {
+      params.push(v)
+      where.push('vendedor=$'+params.length)
+    }
+    if (calificacion) { params.push(calificacion); where.push('calificacion=$'+params.length) }
+    const r = await pool.query(
+      'SELECT * FROM clientes_busqueda WHERE '+where.join(' AND ')+' ORDER BY created_at DESC',
+      params
+    )
+    res.json(r.rows)
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
