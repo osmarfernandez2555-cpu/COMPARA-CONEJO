@@ -47,6 +47,14 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS presupuesto TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_permuta TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_marca TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_modelo TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_version TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_anio TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_km TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_color TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_valor TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -188,9 +196,10 @@ Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
 [GUARDAR_STOCK:{"marca":"Ford","modelo":"Ranger","version":"XLT 4x4","anio":"2022","km":45000,"color":"Blanca","precio":"58000000","moneda":"ARS","estado":"Disponible","notas":"","ubicacion":"Tutu Automotores"}]
 
 Cuando el usuario diga que un cliente busca un auto ("X busca", "X quiere", "X está buscando"):
-• Extraé nombre del cliente, modelo, año, teléfono si lo hay
+• Extraé nombre del cliente, modelo, año, teléfono, presupuesto si lo hay
+• Si el cliente entrega un auto propio como parte de pago (permuta), extraé tiene_permuta:"si" y los datos del auto que entrega (marca, modelo, versión, año, km, color, valor estimado si lo menciona). Si no hay permuta, tiene_permuta:"no"
 • Confirmá con un mensaje
-• Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":""}]
+• Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":"","tiene_permuta":"no","permuta_marca":"","permuta_modelo":"","permuta_version":"","permuta_anio":"","permuta_km":"","permuta_color":"","permuta_valor":""}]
 
 Cuando el usuario diga "eliminá", "borrá" o "sacá" un auto:
 • Confirmá con un mensaje claro
@@ -225,6 +234,7 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
 
       const guardar = reply.match(/\[GUARDAR_STOCK:(\{[^\]]+\})\]/)
       const eliminar = reply.match(/\[ELIMINAR_STOCK:(\{[^\]]+\})\]/)
+      const guardarCliente = reply.match(/\[GUARDAR_CLIENTE:(\{[^\]]+\})\]/)
 
       if (guardar) {
         try {
@@ -260,6 +270,28 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
           console.log('🗑️ Stock eliminado:', marca, modelo, anio)
         } catch(e) { console.error('Error eliminando stock:', e.message) }
         data.content[0].text = data.content[0].text.replace(/\[ELIMINAR_STOCK:[^\]]+\]/g, '').trim()
+      }
+
+      if (guardarCliente) {
+        try {
+          const cli = JSON.parse(guardarCliente[1])
+          const {
+            nombre, telefono='', modelo='', anio='', presupuesto='', notas='', asesor='',
+            tiene_permuta='', permuta_marca='', permuta_modelo='', permuta_version='',
+            permuta_anio='', permuta_km='', permuta_color='', permuta_valor=''
+          } = cli
+          if (nombre) {
+            await pool.query(
+              `INSERT INTO clientes_busqueda
+               (nombre,telefono,modelo,anio,presupuesto,notas,asesor,tiene_permuta,permuta_marca,permuta_modelo,permuta_version,permuta_anio,permuta_km,permuta_color,permuta_valor)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+              [nombre, telefono, modelo, String(anio), String(presupuesto), notas, asesor,
+               tiene_permuta, permuta_marca, permuta_modelo, permuta_version, String(permuta_anio), String(permuta_km), permuta_color, String(permuta_valor)]
+            )
+            console.log('✅ Cliente guardado:', nombre, modelo)
+          }
+        } catch(e) { console.error('Error guardando cliente:', e.message) }
+        data.content[0].text = data.content[0].text.replace(/\[GUARDAR_CLIENTE:[^\]]+\]/g, '').trim()
       }
     }
 
@@ -306,7 +338,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","presupuesto":"15000000","notas":""}]. Extraé el presupuesto/dinero disponible si lo hay. Si el vehiculo dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
+        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","presupuesto":"15000000","notas":"","tiene_permuta":"si","permuta_marca":"Chevrolet","permuta_modelo":"Corsa","permuta_version":"","permuta_anio":"2015","permuta_km":"120000","permuta_color":"Gris","permuta_valor":"3000000"}]. Extraé el presupuesto/dinero disponible si lo hay. Si el cliente menciona que tiene un auto para entregar, permuta, parte de pago con vehiculo o similar, completá tiene_permuta:"si" junto con los datos del auto que entrega (marca, modelo, version, año, km, color y valor estimado si lo menciona). Si no hay permuta o no se menciona, tiene_permuta:"no" y dejá los demas campos de permuta vacios. Si el vehiculo buscado dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
         messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
@@ -323,8 +355,12 @@ app.post('/api/clientes/bulk', async (req, res) => {
       try {
         if (!c.nombre) continue
         await pool.query(
-          'INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,presupuesto,notas) VALUES ($1,$2,$3,$4,$5,$6)',
-          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.presupuesto||'', c.notas||'']
+          `INSERT INTO clientes_busqueda
+           (nombre,telefono,modelo,anio,presupuesto,notas,tiene_permuta,permuta_marca,permuta_modelo,permuta_version,permuta_anio,permuta_km,permuta_color,permuta_valor)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.presupuesto||'', c.notas||'',
+           c.tiene_permuta||'', c.permuta_marca||'', c.permuta_modelo||'', c.permuta_version||'',
+           c.permuta_anio||'', c.permuta_km||'', c.permuta_color||'', c.permuta_valor||'']
         )
         guardados++
       } catch(e) { errores++ }
@@ -615,11 +651,18 @@ app.get('/api/clientes', async (req, res) => {
 // ── Clientes busqueda: guardar ───────────────────────────────
 app.post('/api/clientes', async (req, res) => {
   try {
-    const { nombre, telefono='', marca='', modelo, anio='', presupuesto='', notas='', asesor='' } = req.body
+    const {
+      nombre, telefono='', marca='', modelo, anio='', presupuesto='', notas='', asesor='',
+      tiene_permuta='', permuta_marca='', permuta_modelo='', permuta_version='',
+      permuta_anio='', permuta_km='', permuta_color='', permuta_valor=''
+    } = req.body
     if (!nombre || !modelo) return res.status(400).json({ error: 'Nombre y modelo requeridos' })
     await pool.query(
-      'INSERT INTO clientes_busqueda (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor]
+      `INSERT INTO clientes_busqueda
+       (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor,tiene_permuta,permuta_marca,permuta_modelo,permuta_version,permuta_anio,permuta_km,permuta_color,permuta_valor)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor,
+       tiene_permuta, permuta_marca, permuta_modelo, permuta_version, String(permuta_anio), String(permuta_km), permuta_color, String(permuta_valor)]
     )
     // Buscar si hay match en stock
     const stockMatch = await pool.query(
@@ -633,12 +676,25 @@ app.post('/api/clientes', async (req, res) => {
 // ── Clientes busqueda: marcar encontrado ─────────────────────
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
-    const { estado, vendedor, calificacion } = req.body
+    const {
+      estado, vendedor, calificacion, presupuesto,
+      tiene_permuta, permuta_marca, permuta_modelo, permuta_version,
+      permuta_anio, permuta_km, permuta_color, permuta_valor
+    } = req.body
     const sets = []
     const params = []
     if (estado !== undefined) { params.push(estado); sets.push('estado=$'+params.length) }
     if (vendedor !== undefined) { params.push(vendedor); sets.push('vendedor=$'+params.length) }
     if (calificacion !== undefined) { params.push(calificacion); sets.push('calificacion=$'+params.length) }
+    if (presupuesto !== undefined) { params.push(String(presupuesto)); sets.push('presupuesto=$'+params.length) }
+    if (tiene_permuta !== undefined) { params.push(tiene_permuta); sets.push('tiene_permuta=$'+params.length) }
+    if (permuta_marca !== undefined) { params.push(permuta_marca); sets.push('permuta_marca=$'+params.length) }
+    if (permuta_modelo !== undefined) { params.push(permuta_modelo); sets.push('permuta_modelo=$'+params.length) }
+    if (permuta_version !== undefined) { params.push(permuta_version); sets.push('permuta_version=$'+params.length) }
+    if (permuta_anio !== undefined) { params.push(String(permuta_anio)); sets.push('permuta_anio=$'+params.length) }
+    if (permuta_km !== undefined) { params.push(String(permuta_km)); sets.push('permuta_km=$'+params.length) }
+    if (permuta_color !== undefined) { params.push(permuta_color); sets.push('permuta_color=$'+params.length) }
+    if (permuta_valor !== undefined) { params.push(String(permuta_valor)); sets.push('permuta_valor=$'+params.length) }
     if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
     params.push(req.params.id)
     sets.push('updated_at=NOW()')
