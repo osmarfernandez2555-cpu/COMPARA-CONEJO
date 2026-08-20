@@ -228,6 +228,11 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
 
     const data = await response.json()
 
+    if (!response.ok) {
+      console.error('❌ Error de Anthropic API:', response.status, JSON.stringify(data))
+      return res.status(response.status).json({ error: data.error || data })
+    }
+
     // Procesar comandos de stock en la respuesta
     if (data.content?.[0]?.text) {
       let reply = data.content[0].text
