@@ -42,6 +42,8 @@ async function initDB() {
     )
   `)
   // Agregar columnas nuevas si no existen
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS presupuesto TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
@@ -303,7 +305,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","notas":""}]. Si el vehiculo dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
+        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","presupuesto":"15000000","notas":""}]. Extraé el presupuesto/dinero disponible si lo hay. Si el vehiculo dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
         messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
@@ -320,8 +322,8 @@ app.post('/api/clientes/bulk', async (req, res) => {
       try {
         if (!c.nombre) continue
         await pool.query(
-          'INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,notas) VALUES ($1,$2,$3,$4,$5)',
-          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.notas||'']
+          'INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,presupuesto,notas) VALUES ($1,$2,$3,$4,$5,$6)',
+          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.presupuesto||'', c.notas||'']
         )
         guardados++
       } catch(e) { errores++ }
