@@ -42,6 +42,7 @@ async function initDB() {
     )
   `)
   // Agregar columnas nuevas si no existen
+  await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS presupuesto TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
@@ -240,7 +241,7 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
             )
           } else {
             await pool.query(
-              'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+              'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
               [marca, modelo, version, String(anio), Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion]
             )
           }
@@ -453,7 +454,7 @@ app.post('/api/migrar-stock', async (req, res) => {
       )
       if (existe.rows.length > 0) { saltados++; continue }
       await pool.query(
-        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
         [a.marca, a.modelo, a.version||'', String(a.anio), Number(a.km)||0, a.color||'', String(a.precio), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', a.ubicacion||'Tutu Automotores']
       )
       guardados++
@@ -467,7 +468,7 @@ app.post('/api/migrar-stock', async (req, res) => {
 app.post('/api/stock/bulk', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
-  const { texto, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
+  const { texto, ubicacion='Tutu Automotores', moneda='ARS', telefono='' } = req.body
   if (!texto) return res.status(400).json({ error: 'Texto requerido' })
   try {
     // Dividir en líneas y procesar en grupos de 30 autos
@@ -565,8 +566,8 @@ async function guardarAutosEnDB(autos, ubicacion) {
       )
       if (existe.rows.length > 0) { saltados++; continue }
       await pool.query(
-        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-        [a.marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion]
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        [a.marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion, telefono]
       )
       guardados++
     } catch(e) { errores++; console.error('Error guardando auto:', e.message) }
