@@ -394,7 +394,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       }
     }
 
-    res.json({ ok: true, guardados, errores, matches })
+    res.json({ ok: true, guardados, errores, matches, clientes })
   } catch(e) {
     res.status(500).json({ error: e.message })
   }
