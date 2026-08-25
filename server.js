@@ -55,6 +55,11 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_km TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_color TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_valor TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_galicia TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_bancor TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_nacion TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_santander TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_mg TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -684,7 +689,8 @@ app.patch('/api/clientes/:id', async (req, res) => {
     const {
       estado, vendedor, calificacion, presupuesto,
       tiene_permuta, permuta_marca, permuta_modelo, permuta_version,
-      permuta_anio, permuta_km, permuta_color, permuta_valor
+      permuta_anio, permuta_km, permuta_color, permuta_valor,
+      monto_galicia, monto_bancor, monto_nacion, monto_santander, monto_mg
     } = req.body
     const sets = []
     const params = []
@@ -700,6 +706,11 @@ app.patch('/api/clientes/:id', async (req, res) => {
     if (permuta_km !== undefined) { params.push(String(permuta_km)); sets.push('permuta_km=$'+params.length) }
     if (permuta_color !== undefined) { params.push(permuta_color); sets.push('permuta_color=$'+params.length) }
     if (permuta_valor !== undefined) { params.push(String(permuta_valor)); sets.push('permuta_valor=$'+params.length) }
+    if (monto_galicia !== undefined) { params.push(String(monto_galicia)); sets.push('monto_galicia=$'+params.length) }
+    if (monto_bancor !== undefined) { params.push(String(monto_bancor)); sets.push('monto_bancor=$'+params.length) }
+    if (monto_nacion !== undefined) { params.push(String(monto_nacion)); sets.push('monto_nacion=$'+params.length) }
+    if (monto_santander !== undefined) { params.push(String(monto_santander)); sets.push('monto_santander=$'+params.length) }
+    if (monto_mg !== undefined) { params.push(String(monto_mg)); sets.push('monto_mg=$'+params.length) }
     if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
     params.push(req.params.id)
     sets.push('updated_at=NOW()')
