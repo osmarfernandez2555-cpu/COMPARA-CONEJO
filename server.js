@@ -328,7 +328,14 @@ app.get('/api/match', async (req, res) => {
     
     if (modelo) {
       const stockRows = await buscarEnStock(modelo)
-      const filtered = anio ? stockRows.filter(r => r.anio === String(anio)) : stockRows
+      let filtered = stockRows
+      if (anio) {
+        const anioNum = Number(anio)
+        filtered = stockRows
+          .map(r => ({ ...r, _anioExacto: r.anio === String(anio), _diffAnio: isNaN(Number(r.anio)) ? 99 : Math.abs(Number(r.anio) - anioNum) }))
+          .filter(r => r._diffAnio <= 8)
+          .sort((a, b) => a._diffAnio - b._diffAnio)
+      }
       return res.json(filtered)
     }
     
