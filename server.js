@@ -406,61 +406,35 @@ app.post('/api/clientes/bulk', async (req, res) => {
 // ── Función centralizada de búsqueda inteligente ────────────
 async function buscarEnStock(texto) {
   if (!texto || texto.length < 2) return []
-  
-  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo'])
-  
+
+  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo','nuevo','nueva'])
+
   const palabras = texto.split(/\s+/)
     .filter(p => p.length >= 2 && !stopWords.has(p.toLowerCase()) && isNaN(p))
-  
+
   if (palabras.length === 0) return []
 
-  // 1. Búsqueda exacta del texto completo contra marca+modelo
-  const textoLimpio = palabras.join(' ')
-  const r0 = await pool.query(
-    `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1)`,
-    [`%${textoLimpio}%`]
-  )
-  if (r0.rows.length > 0) return r0.rows
+  // 1. Traer candidatos: autos que contengan AL MENOS UNA de las palabras buscadas
+  //    en marca, modelo o versión (sin importar en qué campo esté cada palabra,
+  //    porque la IA no siempre las guarda en el mismo campo)
+  const orClauses = palabras.map((_, i) =>
+    `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
+  ).join(' OR ')
+  const params = palabras.map(p => `%${p}%`)
+  const candidatos = await pool.query(`SELECT * FROM stock WHERE ${orClauses} ORDER BY marca, modelo`, params)
+  if (candidatos.rows.length === 0) return []
 
-  // 2. Si hay 2+ palabras: buscar que TODAS las palabras (incluida versión/motorización) aparezcan
-  if (palabras.length >= 2) {
-    let whereClause = palabras.map((_, i) => 
-      `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
-    ).join(' AND ')
-    const params = palabras.map(p => `%${p}%`)
-    const r1 = await pool.query(`SELECT * FROM stock WHERE ${whereClause} ORDER BY marca, modelo`, params)
-    if (r1.rows.length > 0) return r1.rows
-
-    // 2b. Relajar: si no matcheó con todos los detalles (motor, trim, etc), probar solo con
-    // las primeras dos palabras (normalmente marca + modelo, ej: "Volkswagen Amarok")
-    const dosPalabras = palabras.slice(0, 2)
-    if (dosPalabras.length === 2) {
-      const r1b = await pool.query(
-        `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1) AND LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($2) ORDER BY marca, modelo`,
-        [`%${dosPalabras[0]}%`, `%${dosPalabras[1]}%`]
-      )
-      if (r1b.rows.length > 0) return r1b.rows
-    }
-  }
-
-  // 3. Solo si hay 1 palabra: buscar por modelo exacto (no por marca sola)
-  if (palabras.length === 1) {
-    const r2 = await pool.query(
-      `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
-      [`%${palabras[0]}%`]
-    )
-    return r2.rows
-  }
-
-  // 4. Fallback: probar cada palabra (no solo la primera) contra marca O modelo
-  for (const p of palabras) {
-    const r3 = await pool.query(
-      `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) OR LOWER(marca) LIKE LOWER($1) ORDER BY marca, modelo`,
-      [`%${p}%`]
-    )
-    if (r3.rows.length > 0) return r3.rows
-  }
-  return []
+  // 2. Puntuar cada auto según cuántas palabras de la búsqueda contiene
+  //    (sumando marca+modelo+version), y quedarnos con los mejor puntuados
+  const scored = candidatos.rows.map(r => {
+    const campo = `${r.marca||''} ${r.modelo||''} ${r.version||''}`.toLowerCase()
+    const score = palabras.filter(p => campo.includes(p.toLowerCase())).length
+    return { row: r, score }
+  })
+  const maxScore = Math.max(...scored.map(s => s.score))
+  // Si hay 2+ palabras relevantes, exigimos que matcheen al menos 2 (o todas, si solo hay 1)
+  const minScore = palabras.length >= 2 ? Math.min(2, maxScore) : 1
+  return scored.filter(s => s.score >= minScore).sort((a, b) => b.score - a.score).map(s => s.row)
 }
 
 // ── Migración: cargar stock hardcodeado a la DB ─────────────
