@@ -552,7 +552,7 @@ app.post('/api/stock/bulk', async (req, res) => {
     }
 
     console.log('Total autos parseados:', todosLosAutos.length)
-    const result = await guardarAutosEnDB(todosLosAutos, ubicacion)
+    const result = await guardarAutosEnDB(todosLosAutos, ubicacion, telefono)
     const matches = await buscarMatchesClientes(todosLosAutos)
     res.json({ ...result, matches })
   } catch(e) { res.status(500).json({ error: e.message }) }
@@ -563,7 +563,7 @@ app.post('/api/stock/bulk', async (req, res) => {
 app.post('/api/stock/bulk-pdf', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
-  const { pdf, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
+  const { pdf, ubicacion='Tutu Automotores', moneda='ARS', telefono='' } = req.body
   if (!pdf) return res.status(400).json({ error: 'PDF requerido' })
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -602,26 +602,27 @@ Formato: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km"
     } catch(e) {
       return res.status(400).json({ error: 'JSON inválido en PDF: ' + e.message })
     }
-    const result = await guardarAutosEnDB(autos, ubicacion)
+    const result = await guardarAutosEnDB(autos, ubicacion, telefono)
     const matches = await buscarMatchesClientes(autos)
     res.json({ ...result, matches })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Helpers compartidos ──────────────────────────────────────
-async function guardarAutosEnDB(autos, ubicacion) {
+async function guardarAutosEnDB(autos, ubicacion, telefono='') {
   let guardados = 0, saltados = 0, errores = 0
   for (const a of autos) {
-    if (!a.marca || !a.modelo) { errores++; continue }
+    if (!a.modelo) { errores++; continue }
+    var marca = a.marca || '';
     try {
       const existe = await pool.query(
         'SELECT id FROM stock WHERE LOWER(marca)=LOWER($1) AND LOWER(modelo)=LOWER($2) AND anio=$3 AND LOWER(ubicacion)=LOWER($4)',
-        [a.marca, a.modelo, String(a.anio||''), ubicacion]
+        [marca, a.modelo, String(a.anio||''), ubicacion]
       )
       if (existe.rows.length > 0) { saltados++; continue }
       await pool.query(
         'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
-        [a.marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion, telefono]
+        [marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion, telefono]
       )
       guardados++
     } catch(e) { errores++; console.error('Error guardando auto:', e.message) }
