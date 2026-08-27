@@ -215,8 +215,9 @@ Cuando el usuario diga "eliminá", "borrá" o "sacá" un auto:
 • Confirmá con un mensaje claro
 • Al FINAL agregá: [ELIMINAR_STOCK:{"marca":"Ford","modelo":"Ranger","anio":"2022"}]
 
-Cuando diga "mostrá el stock", "qué autos tenemos", "listá vehículos cargados":
+Cuando diga "mostrá el stock", "qué autos tenemos", "listá vehículos cargados", "mostrame todo", "todos los autos" o similar:
 • Mostrá el stock de la sección STOCK CARGADO POR EMPLEADOS de forma ordenada y clara.
+• IMPORTANTE: Listá SIEMPRE la totalidad de los autos que haya en esa sección, sin resumir, sin cortar y sin decir "hay más pero no los muestro". Si hay 90 autos, listá los 90. Nunca digas "y otros X vehículos más" en lugar de listarlos.
 
 IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre al final, en una línea, sin saltos de línea adentro del JSON.`
 
