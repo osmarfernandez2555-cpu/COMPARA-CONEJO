@@ -422,7 +422,7 @@ async function buscarEnStock(texto) {
   )
   if (r0.rows.length > 0) return r0.rows
 
-  // 2. Si hay 2+ palabras: buscar que TODAS las palabras aparezcan en marca+modelo
+  // 2. Si hay 2+ palabras: buscar que TODAS las palabras (incluida versión/motorización) aparezcan
   if (palabras.length >= 2) {
     let whereClause = palabras.map((_, i) => 
       `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
@@ -430,6 +430,17 @@ async function buscarEnStock(texto) {
     const params = palabras.map(p => `%${p}%`)
     const r1 = await pool.query(`SELECT * FROM stock WHERE ${whereClause} ORDER BY marca, modelo`, params)
     if (r1.rows.length > 0) return r1.rows
+
+    // 2b. Relajar: si no matcheó con todos los detalles (motor, trim, etc), probar solo con
+    // las primeras dos palabras (normalmente marca + modelo, ej: "Volkswagen Amarok")
+    const dosPalabras = palabras.slice(0, 2)
+    if (dosPalabras.length === 2) {
+      const r1b = await pool.query(
+        `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1) AND LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($2) ORDER BY marca, modelo`,
+        [`%${dosPalabras[0]}%`, `%${dosPalabras[1]}%`]
+      )
+      if (r1b.rows.length > 0) return r1b.rows
+    }
   }
 
   // 3. Solo si hay 1 palabra: buscar por modelo exacto (no por marca sola)
@@ -441,12 +452,15 @@ async function buscarEnStock(texto) {
     return r2.rows
   }
 
-  // 4. Fallback: primera palabra solo en modelo (nunca en marca sola)
-  const r3 = await pool.query(
-    `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
-    [`%${palabras[0]}%`]
-  )
-  return r3.rows
+  // 4. Fallback: probar cada palabra (no solo la primera) contra marca O modelo
+  for (const p of palabras) {
+    const r3 = await pool.query(
+      `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) OR LOWER(marca) LIKE LOWER($1) ORDER BY marca, modelo`,
+      [`%${p}%`]
+    )
+    if (r3.rows.length > 0) return r3.rows
+  }
+  return []
 }
 
 // ── Migración: cargar stock hardcodeado a la DB ─────────────
