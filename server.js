@@ -732,6 +732,14 @@ app.patch('/api/clientes/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
+// ── Eliminar cliente ──────────────────────────────────────────
+app.delete('/api/clientes/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM clientes_busqueda WHERE id=$1', [req.params.id])
+    res.json({ ok: true })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
 // ── Dashboard por vendedor ────────────────────────────────────
 app.get('/api/dashboard/vendedores', async (req, res) => {
   try {
