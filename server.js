@@ -65,6 +65,18 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS garante_nombre TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS garante_dni TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`CREATE TABLE IF NOT EXISTS vendedores (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+  )`).catch(()=>{})
+  // Sembrar vendedores por defecto la primera vez (si la tabla está vacía)
+  const vCount = await pool.query('SELECT COUNT(*) FROM vendedores').catch(()=>({rows:[{count:'1'}]}))
+  if (Number(vCount.rows[0].count) === 0) {
+    for (const nombre of ['Joaquin','Agustin','Rodrigo','Nahuel','Lucas','Matias']) {
+      await pool.query('INSERT INTO vendedores (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING', [nombre]).catch(()=>{})
+    }
+  }
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -647,7 +659,7 @@ async function buscarMatchesClientes(autos) {
 // ── Clientes busqueda: leer ──────────────────────────────────
 app.get('/api/clientes', async (req, res) => {
   try {
-    const { modelo, anio } = req.query
+    const { modelo, anio, vendedor } = req.query
     let where = ['estado=$1']
     let params = ['Buscando']
     if (modelo) {
@@ -658,9 +670,49 @@ app.get('/api/clientes', async (req, res) => {
       }
     }
     if (anio) { params.push(String(anio)); where.push('anio=$'+params.length) }
+    if (vendedor) { params.push(vendedor); where.push('LOWER(vendedor)=LOWER($'+params.length+')') }
     const q = 'SELECT DISTINCT ON (LOWER(nombre), LOWER(telefono)) * FROM clientes_busqueda WHERE '+where.join(' AND ')+' ORDER BY LOWER(nombre), LOWER(telefono), created_at DESC'
     const r = await pool.query(q, params)
     res.json(r.rows)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// ── Vendedores: compartidos entre todos los dispositivos ─────
+app.get('/api/vendedores', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT nombre FROM vendedores ORDER BY nombre')
+    res.json(r.rows.map(row => row.nombre))
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.post('/api/vendedores', async (req, res) => {
+  try {
+    const nombre = (req.body.nombre || '').trim()
+    if (!nombre) return res.status(400).json({ error: 'Nombre requerido' })
+    await pool.query('INSERT INTO vendedores (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING', [nombre])
+    res.json({ ok: true })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.patch('/api/vendedores/:nombreViejo', async (req, res) => {
+  try {
+    const nombreViejo = req.params.nombreViejo
+    const nombreNuevo = (req.body.nombre || '').trim()
+    if (!nombreNuevo) return res.status(400).json({ error: 'Nombre requerido' })
+    await pool.query('UPDATE vendedores SET nombre=$1 WHERE LOWER(nombre)=LOWER($2)', [nombreNuevo, nombreViejo])
+    // Actualizar también los leads que ya tenía asignados, para que no se desasignen
+    await pool.query('UPDATE clientes_busqueda SET vendedor=$1 WHERE LOWER(vendedor)=LOWER($2)', [nombreNuevo, nombreViejo])
+    res.json({ ok: true })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+app.delete('/api/vendedores/:nombre', async (req, res) => {
+  try {
+    const nombre = req.params.nombre
+    await pool.query('DELETE FROM vendedores WHERE LOWER(nombre)=LOWER($1)', [nombre])
+    // Los leads que tenía asignados quedan como "sin asignar"
+    await pool.query(`UPDATE clientes_busqueda SET vendedor='' WHERE LOWER(vendedor)=LOWER($1)`, [nombre])
+    res.json({ ok: true })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -732,11 +784,17 @@ app.patch('/api/clientes/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Eliminar cliente ──────────────────────────────────────────
+// ── Eliminar cliente (borra también duplicados: mismo nombre+teléfono) ──
 app.delete('/api/clientes/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM clientes_busqueda WHERE id=$1', [req.params.id])
-    res.json({ ok: true })
+    const actual = await pool.query('SELECT nombre, telefono FROM clientes_busqueda WHERE id=$1', [req.params.id])
+    if (actual.rows.length === 0) return res.json({ ok: true, eliminados: 0 })
+    const { nombre, telefono } = actual.rows[0]
+    const r = await pool.query(
+      'DELETE FROM clientes_busqueda WHERE LOWER(nombre)=LOWER($1) AND LOWER(telefono)=LOWER($2)',
+      [nombre, telefono || '']
+    )
+    res.json({ ok: true, eliminados: r.rowCount })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
