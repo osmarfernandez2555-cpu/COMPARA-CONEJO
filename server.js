@@ -65,6 +65,8 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS garante_nombre TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS garante_dni TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS estado_lead TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS observaciones TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`CREATE TABLE IF NOT EXISTS vendedores (
     id SERIAL PRIMARY KEY,
     nombre TEXT UNIQUE NOT NULL,
@@ -751,7 +753,8 @@ app.patch('/api/clientes/:id', async (req, res) => {
       tiene_permuta, permuta_marca, permuta_modelo, permuta_version,
       permuta_anio, permuta_km, permuta_color, permuta_valor,
       monto_galicia, monto_bancor, monto_nacion, monto_santander, monto_mg,
-      tiene_garantes, garante_nombre, garante_dni
+      tiene_garantes, garante_nombre, garante_dni,
+      estado_lead, observaciones
     } = req.body
     const sets = []
     const params = []
@@ -776,6 +779,8 @@ app.patch('/api/clientes/:id', async (req, res) => {
     if (tiene_garantes !== undefined) { params.push(tiene_garantes); sets.push('tiene_garantes=$'+params.length) }
     if (garante_nombre !== undefined) { params.push(garante_nombre); sets.push('garante_nombre=$'+params.length) }
     if (garante_dni !== undefined) { params.push(garante_dni); sets.push('garante_dni=$'+params.length) }
+    if (estado_lead !== undefined) { params.push(estado_lead); sets.push('estado_lead=$'+params.length) }
+    if (observaciones !== undefined) { params.push(observaciones); sets.push('observaciones=$'+params.length) }
     if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
     params.push(req.params.id)
     sets.push('updated_at=NOW()')
