@@ -771,9 +771,13 @@ async function infoautoFetch(path) {
 // Buscar autos en InfoAuto
 app.get('/api/infoauto/search', async (req, res) => {
   try {
-    const { q, page = 1, pageSize = 10 } = req.query
+    const { q, page = 1, pageSize = 20 } = req.query
     if (!q) return res.status(400).json({ error: 'Falta query' })
-    const data = await infoautoFetch(`/auth/snapshots/search?query_string=${encodeURIComponent(q)}&page=${page}&pageSize=${pageSize}`)
+    const token = await getInfoautoToken()
+    const r = await fetch(`${INFOAUTO_API}/pub/search/?page=${page}&page_size=${pageSize}&query_string=${encodeURIComponent(q)}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const data = await r.json()
     res.json(data)
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
