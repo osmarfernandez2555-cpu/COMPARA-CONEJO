@@ -7,8 +7,6 @@ const { Pool } = require('pg')
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '50mb' }))
-app.use(express.static(path.join(__dirname, 'public')))
-
 // ── PostgreSQL ──────────────────────────────────────────────
 const dbUrl = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL || process.env.POSTGRES_URL
 const isInternal = (dbUrl || '').includes('railway.internal')
@@ -44,15 +42,6 @@ async function initDB() {
   // Agregar columnas nuevas si no existen
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS observaciones TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS estado_lead TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS bancos TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_galicia TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_bancor TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_nacion TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_santander TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_mg TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -639,20 +628,12 @@ app.post('/api/clientes', async (req, res) => {
 // ── Clientes busqueda: marcar encontrado ─────────────────────
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
-    const { estado, vendedor, calificacion, observaciones, estado_lead, bancos, monto_galicia, monto_bancor, monto_nacion, monto_santander, monto_mg } = req.body
+    const { estado, vendedor, calificacion } = req.body
     const sets = []
     const params = []
     if (estado !== undefined) { params.push(estado); sets.push('estado=$'+params.length) }
     if (vendedor !== undefined) { params.push(vendedor); sets.push('vendedor=$'+params.length) }
     if (calificacion !== undefined) { params.push(calificacion); sets.push('calificacion=$'+params.length) }
-    if (observaciones !== undefined) { params.push(observaciones); sets.push('observaciones=$'+params.length) }
-    if (estado_lead !== undefined) { params.push(estado_lead); sets.push('estado_lead=$'+params.length) }
-    if (bancos !== undefined) { params.push(bancos); sets.push('bancos=$'+params.length) }
-    if (monto_galicia !== undefined) { params.push(monto_galicia); sets.push('monto_galicia=$'+params.length) }
-    if (monto_bancor !== undefined) { params.push(monto_bancor); sets.push('monto_bancor=$'+params.length) }
-    if (monto_nacion !== undefined) { params.push(monto_nacion); sets.push('monto_nacion=$'+params.length) }
-    if (monto_santander !== undefined) { params.push(monto_santander); sets.push('monto_santander=$'+params.length) }
-    if (monto_mg !== undefined) { params.push(monto_mg); sets.push('monto_mg=$'+params.length) }
     if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
     params.push(req.params.id)
     sets.push('updated_at=NOW()')
@@ -867,6 +848,8 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }) }
 });
 // ── FIN VENDEDORES ────────────────────────────────────────────────────────────
+
+app.use(express.static(path.join(__dirname, 'public')))
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`))
