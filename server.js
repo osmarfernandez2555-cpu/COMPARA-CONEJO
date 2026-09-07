@@ -791,54 +791,58 @@ infoautoLogin().catch(e => console.error('⚠️ InfoAuto login inicial falló:'
 
 
 // ── VENDEDORES ────────────────────────────────────────────────────────────────
-// Tabla de vendedores en SQLite
-db.prepare(`CREATE TABLE IF NOT EXISTS vendedores (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  nombre TEXT UNIQUE NOT NULL
-)`).run();
-
-// Insertar vendedores por defecto si la tabla está vacía
-const countVend = db.prepare('SELECT COUNT(*) as c FROM vendedores').get();
-if (countVend.c === 0) {
-  ['Joaquin','Agustin','Rodrigo','Nahuel','Lucas','Matias'].forEach(n => {
-    db.prepare('INSERT OR IGNORE INTO vendedores (nombre) VALUES (?)').run(n);
-  });
-}
+// Crear tabla vendedores en PostgreSQL si no existe e insertar defaults
+;(async () => {
+  await pool.query(`CREATE TABLE IF NOT EXISTS vendedores (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT UNIQUE NOT NULL
+  )`);
+  const { rows } = await pool.query('SELECT COUNT(*) as c FROM vendedores');
+  if (parseInt(rows[0].c) === 0) {
+    for (const n of ['Joaquin','Agustin','Rodrigo','Nahuel','Lucas','Matias']) {
+      await pool.query('INSERT INTO vendedores (nombre) VALUES ($1) ON CONFLICT DO NOTHING', [n]);
+    }
+  }
+})().catch(e => console.error('Error init vendedores:', e.message));
 
 // GET /api/vendedores — lista de nombres
-app.get('/api/vendedores', (req, res) => {
-  const rows = db.prepare('SELECT nombre FROM vendedores ORDER BY nombre').all();
-  res.json(rows.map(r => r.nombre));
+app.get('/api/vendedores', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT nombre FROM vendedores ORDER BY nombre');
+    res.json(rows.map(r => r.nombre));
+  } catch(e) { res.status(500).json({ error: e.message }) }
 });
 
 // POST /api/vendedores — agregar vendedor
-app.post('/api/vendedores', (req, res) => {
+app.post('/api/vendedores', async (req, res) => {
   const { nombre } = req.body;
   if (!nombre) return res.status(400).json({ error: 'Falta nombre' });
   try {
-    db.prepare('INSERT INTO vendedores (nombre) VALUES (?)').run(nombre.trim());
+    await pool.query('INSERT INTO vendedores (nombre) VALUES ($1)', [nombre.trim()]);
     res.json({ ok: true });
   } catch(e) { res.status(409).json({ error: 'Ya existe' }); }
 });
 
 // PATCH /api/vendedores/:nombre — renombrar vendedor
-app.patch('/api/vendedores/:nombre', (req, res) => {
+app.patch('/api/vendedores/:nombre', async (req, res) => {
   const { nombre } = req.params;
   const { nombre: nuevo } = req.body;
   if (!nuevo) return res.status(400).json({ error: 'Falta nombre nuevo' });
-  db.prepare('UPDATE vendedores SET nombre=? WHERE nombre=?').run(nuevo.trim(), nombre);
-  // Actualizar leads asignados
-  db.prepare('UPDATE clientes_busqueda SET vendedor=? WHERE vendedor=?').run(nuevo.trim(), nombre);
-  res.json({ ok: true });
+  try {
+    await pool.query('UPDATE vendedores SET nombre=$1 WHERE nombre=$2', [nuevo.trim(), nombre]);
+    await pool.query('UPDATE clientes_busqueda SET vendedor=$1 WHERE vendedor=$2', [nuevo.trim(), nombre]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }) }
 });
 
 // DELETE /api/vendedores/:nombre — eliminar vendedor
-app.delete('/api/vendedores/:nombre', (req, res) => {
+app.delete('/api/vendedores/:nombre', async (req, res) => {
   const { nombre } = req.params;
-  db.prepare('DELETE FROM vendedores WHERE nombre=?').run(nombre);
-  // Desasignar leads
-  db.prepare("UPDATE clientes_busqueda SET vendedor='' WHERE vendedor=?").run(nombre);
-  res.json({ ok: true });
+  try {
+    await pool.query('DELETE FROM vendedores WHERE nombre=$1', [nombre]);
+    await pool.query("UPDATE clientes_busqueda SET vendedor='' WHERE vendedor=$1", [nombre]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }) }
 });
 // ── FIN VENDEDORES ────────────────────────────────────────────────────────────
 
