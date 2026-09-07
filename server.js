@@ -197,9 +197,54 @@ Cuando diga "mostrá el stock", "qué autos tenemos", "listá vehículos cargado
 IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre al final, en una línea, sin saltos de línea adentro del JSON.`
 
     // Inyectar stock y comandos en el system prompt
+    // Detectar si la pregunta es sobre precio de un auto (InfoAuto)
+    let infoautoExtra = ''
+    const lastMsg = req.body.messages?.[req.body.messages.length - 1]?.content || ''
+    const esPrecio = /precio|vale|cuesta|cuanto|infoauto|cotiz/i.test(lastMsg)
+    const noEsStock = !/tenemos|stock|disponible|tutu/i.test(lastMsg)
+    if (esPrecio && noEsStock) {
+      // Extraer el modelo del mensaje para buscar en InfoAuto
+      const queryMatch = lastMsg.match(/(?:precio|vale|cuesta|cuanto|infoauto|cotiz)[^\w]*(?:de|del|un|una|el|la)?\s+([a-zA-Z0-9\s]{3,40}?)(?:\?|$|\.|,)/i)
+      const query = queryMatch ? queryMatch[1].trim() : lastMsg.replace(/precio|vale|cuesta|cuanto|infoauto|cotiz|de|del|un|una|el|la|\?/gi, ' ').trim().slice(0, 40)
+      if (query.length > 2) {
+        try {
+          const token = await getInfoautoToken()
+          const iaResp = await fetch(`${INFOAUTO_API}/pub/search/?page=1&page_size=5&query_string=${encodeURIComponent(query)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const iaData = await iaResp.json()
+          const items = Array.isArray(iaData) ? iaData : []
+          if (items.length > 0) {
+            // Para cada resultado buscar precios
+            const preciosPromises = items.slice(0, 3).map(async item => {
+              try {
+                const pr = await fetch(`${INFOAUTO_API}/pub/models/${item.codia}/prices/`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                })
+                const precios = await pr.json()
+                const nombre = (item.brand?.name || '') + ' ' + (item.description || '')
+                if (Array.isArray(precios) && precios.length > 0) {
+                  const sorted = precios.sort((a,b) => (b.year||0)-(a.year||0)).slice(0,5)
+                  const lineas = sorted.map(p => '  ' + p.year + ': $' + Number(p.price||0).toLocaleString('es-AR')).join('\n')
+                  return `• ${nombre.trim()}:
+${lineas}`
+                }
+                return null
+              } catch(e) { return null }
+            })
+            const precios = (await Promise.all(preciosPromises)).filter(Boolean)
+            if (precios.length > 0) {
+              const preciosStr = precios.join('\n')
+              infoautoExtra = '\n\n== PRECIOS INFOAUTO (busqueda: ' + query + ') ==\n' + preciosStr + '\n== FIN INFOAUTO ==\nUsa estos precios de InfoAuto para responder sobre el valor del auto. Aclara que son precios de referencia de InfoAuto.'
+            }
+          }
+        } catch(e) { console.error('InfoAuto chat error:', e.message) }
+      }
+    }
+
     const body = {
       ...req.body,
-      system: req.body.system + stockExtra + comandos
+      system: req.body.system + stockExtra + comandos + infoautoExtra
     }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
