@@ -715,10 +715,13 @@ let infoautoExpiry   = 0
 let infoautoRefresh  = null
 
 async function infoautoLogin() {
+  const basicToken = Buffer.from(`${INFOAUTO_EMAIL}:${INFOAUTO_PASS}`).toString('base64')
   const r = await fetch(`${INFOAUTO_API}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: INFOAUTO_EMAIL, password: INFOAUTO_PASS })
+    headers: {
+      'Content-type': 'application/json',
+      'Authorization': `Basic ${basicToken}`
+    }
   })
   if (!r.ok) throw new Error('InfoAuto login falló: ' + r.status)
   const d = await r.json()
