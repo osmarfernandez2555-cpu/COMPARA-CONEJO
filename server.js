@@ -42,43 +42,8 @@ async function initDB() {
     )
   `)
   // Agregar columnas nuevas si no existen
-  await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS presupuesto TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_permuta TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_marca TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_modelo TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_version TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_anio TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_km TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_color TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS permuta_valor TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_galicia TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_bancor TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_nacion TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_santander TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_mg TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS garante_nombre TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS garante_dni TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS estado_lead TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS observaciones TEXT DEFAULT ''`).catch(()=>{})
-  await pool.query(`CREATE TABLE IF NOT EXISTS vendedores (
-    id SERIAL PRIMARY KEY,
-    nombre TEXT UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-  )`).catch(()=>{})
-  // Sembrar vendedores por defecto la primera vez (si la tabla está vacía)
-  const vCount = await pool.query('SELECT COUNT(*) FROM vendedores').catch(()=>({rows:[{count:'1'}]}))
-  if (Number(vCount.rows[0].count) === 0) {
-    for (const nombre of ['Joaquin','Agustin','Rodrigo','Nahuel','Lucas','Matias']) {
-      await pool.query('INSERT INTO vendedores (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING', [nombre]).catch(()=>{})
-    }
-  }
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -220,20 +185,16 @@ Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
 [GUARDAR_STOCK:{"marca":"Ford","modelo":"Ranger","version":"XLT 4x4","anio":"2022","km":45000,"color":"Blanca","precio":"58000000","moneda":"ARS","estado":"Disponible","notas":"","ubicacion":"Tutu Automotores"}]
 
 Cuando el usuario diga que un cliente busca un auto ("X busca", "X quiere", "X está buscando"):
-• Extraé nombre del cliente, modelo, año, teléfono, DNI y presupuesto si lo hay
-• Si el cliente entrega un auto propio como parte de pago (permuta), extraé tiene_permuta:"si" y TODOS los datos del auto que entrega que mencione: marca, modelo, versión/motorización, año, km, color, valor estimado — aunque vengan mezclados en la misma frase sin etiquetas (ej: "un Corsa 1.4 2015 con 90000 km"). Si no hay permuta, tiene_permuta:"no"
-• Si el cliente menciona un RANGO de años para lo que busca (ej: "de 2013 a 2018"), guardalo en "anio" como "2013-2018", no un solo año inventado.
-• Si el cliente menciona garante/s o co-firmante, extraé tiene_garantes:"si" junto con nombre y DNI del garante si los menciona. Si no, tiene_garantes:"no"
+• Extraé nombre del cliente, modelo, año, teléfono si lo hay
 • Confirmá con un mensaje
-• Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","dni":"","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":"","tiene_permuta":"no","permuta_marca":"","permuta_modelo":"","permuta_version":"","permuta_anio":"","permuta_km":"","permuta_color":"","permuta_valor":"","tiene_garantes":"no","garante_nombre":"","garante_dni":""}]
+• Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":""}]
 
 Cuando el usuario diga "eliminá", "borrá" o "sacá" un auto:
 • Confirmá con un mensaje claro
 • Al FINAL agregá: [ELIMINAR_STOCK:{"marca":"Ford","modelo":"Ranger","anio":"2022"}]
 
-Cuando diga "mostrá el stock", "qué autos tenemos", "listá vehículos cargados", "mostrame todo", "todos los autos" o similar:
+Cuando diga "mostrá el stock", "qué autos tenemos", "listá vehículos cargados":
 • Mostrá el stock de la sección STOCK CARGADO POR EMPLEADOS de forma ordenada y clara.
-• IMPORTANTE: Listá SIEMPRE la totalidad de los autos que haya en esa sección, sin resumir, sin cortar y sin decir "hay más pero no los muestro". Si hay 90 autos, listá los 90. Nunca digas "y otros X vehículos más" en lugar de listarlos.
 
 IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre al final, en una línea, sin saltos de línea adentro del JSON.`
 
@@ -255,18 +216,12 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
 
     const data = await response.json()
 
-    if (!response.ok) {
-      console.error('❌ Error de Anthropic API:', response.status, JSON.stringify(data))
-      return res.status(response.status).json({ error: data.error || data })
-    }
-
     // Procesar comandos de stock en la respuesta
     if (data.content?.[0]?.text) {
       let reply = data.content[0].text
 
       const guardar = reply.match(/\[GUARDAR_STOCK:(\{[^\]]+\})\]/)
       const eliminar = reply.match(/\[ELIMINAR_STOCK:(\{[^\]]+\})\]/)
-      const guardarCliente = reply.match(/\[GUARDAR_CLIENTE:(\{[^\]]+\})\]/)
 
       if (guardar) {
         try {
@@ -283,7 +238,7 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
             )
           } else {
             await pool.query(
-              'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+              'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
               [marca, modelo, version, String(anio), Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion]
             )
           }
@@ -303,30 +258,6 @@ IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre a
         } catch(e) { console.error('Error eliminando stock:', e.message) }
         data.content[0].text = data.content[0].text.replace(/\[ELIMINAR_STOCK:[^\]]+\]/g, '').trim()
       }
-
-      if (guardarCliente) {
-        try {
-          const cli = JSON.parse(guardarCliente[1])
-          const {
-            nombre, telefono='', dni='', modelo='', anio='', presupuesto='', notas='', asesor='',
-            tiene_permuta='', permuta_marca='', permuta_modelo='', permuta_version='',
-            permuta_anio='', permuta_km='', permuta_color='', permuta_valor='',
-            tiene_garantes='', garante_nombre='', garante_dni=''
-          } = cli
-          if (nombre) {
-            await pool.query(
-              `INSERT INTO clientes_busqueda
-               (nombre,telefono,dni,modelo,anio,presupuesto,notas,asesor,tiene_permuta,permuta_marca,permuta_modelo,permuta_version,permuta_anio,permuta_km,permuta_color,permuta_valor,tiene_garantes,garante_nombre,garante_dni)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-              [nombre, telefono, dni, modelo, String(anio), String(presupuesto), notas, asesor,
-               tiene_permuta, permuta_marca, permuta_modelo, permuta_version, String(permuta_anio), String(permuta_km), permuta_color, String(permuta_valor),
-               tiene_garantes, garante_nombre, garante_dni]
-            )
-            console.log('✅ Cliente guardado:', nombre, modelo)
-          }
-        } catch(e) { console.error('Error guardando cliente:', e.message) }
-        data.content[0].text = data.content[0].text.replace(/\[GUARDAR_CLIENTE:[^\]]+\]/g, '').trim()
-      }
     }
 
     res.json(data)
@@ -344,44 +275,11 @@ app.get('/api/match', async (req, res) => {
     
     if (modelo) {
       const stockRows = await buscarEnStock(modelo)
-      let filtered = stockRows
-      if (anio) {
-        // Soporta rangos de año: "2013-2018", "2013 a 2018", "2013 - 2018"
-        const rango = String(anio).match(/(\d{4})\s*(?:-|a)\s*(\d{4})/i)
-        let anioLo, anioHi
-        if (rango) {
-          anioLo = Math.min(Number(rango[1]), Number(rango[2]))
-          anioHi = Math.max(Number(rango[1]), Number(rango[2]))
-        } else {
-          const soloAnio = Number(String(anio).match(/\d{4}/)?.[0] || anio)
-          anioLo = anioHi = soloAnio
-        }
-        filtered = stockRows
-          .map(r => {
-            const rAnio = Number(r.anio)
-            const dentroDeRango = !isNaN(rAnio) && rAnio >= anioLo && rAnio <= anioHi
-            let diff
-            if (isNaN(rAnio) || isNaN(anioLo)) diff = 99
-            else if (dentroDeRango) diff = 0
-            else diff = Math.min(Math.abs(rAnio - anioLo), Math.abs(rAnio - anioHi))
-            return { ...r, _anioExacto: dentroDeRango, _diffAnio: diff }
-          })
-          .filter(r => r._diffAnio <= 8)
-          .sort((a, b) => a._diffAnio - b._diffAnio)
-      }
+      const filtered = anio ? stockRows.filter(r => r.anio === String(anio)) : stockRows
       return res.json(filtered)
     }
     
-    // Solo año (también soporta rango)
-    {
-      const rango = String(anio).match(/(\d{4})\s*(?:-|a)\s*(\d{4})/i)
-      if (rango) {
-        const lo = Math.min(Number(rango[1]), Number(rango[2]))
-        const hi = Math.max(Number(rango[1]), Number(rango[2]))
-        const result = await pool.query('SELECT * FROM stock WHERE anio::int BETWEEN $1 AND $2 ORDER BY marca, modelo', [lo, hi])
-        return res.json(result.rows)
-      }
-    }
+    // Solo año
     const result = await pool.query('SELECT * FROM stock WHERE anio=$1 ORDER BY marca, modelo', [String(anio)])
     res.json(result.rows)
   } catch(e) { res.status(500).json({ error: e.message }) }
@@ -405,7 +303,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","dni":"30123456","modelo":"Gol Trend","anio":"","presupuesto":"15000000","notas":"","tiene_permuta":"si","permuta_marca":"Chevrolet","permuta_modelo":"Corsa","permuta_version":"","permuta_anio":"2015","permuta_km":"120000","permuta_color":"Gris","permuta_valor":"3000000","tiene_garantes":"si","garante_nombre":"Maria Lopez","garante_dni":"28123456"}]. Extraé el presupuesto/dinero disponible si lo hay, y el DNI del cliente si lo menciona. Si el auto buscado menciona un RANGO de años (ej: "de 2013 a 2018", "entre 2015 y 2020", "2016-2019"), poné ese rango en el campo "anio" con el formato exacto "AAAA-AAAA" (ej: "2013-2018"), nunca un solo año inventado. Si es un solo año, poné solo ese año. Si el cliente menciona que tiene un auto para entregar, permuta, parte de pago con vehiculo o similar, completá tiene_permuta:"si" junto con TODOS los datos del auto que entrega que aparezcan en el texto: marca, modelo, version/motorización, año, kilometraje, color y valor estimado. IMPORTANTE: estos datos de la permuta suelen venir mezclados en la misma frase sin etiquetas explícitas (ej: "entrega un Corsa 1.4 2015 con 90000 km" → permuta_modelo:"Corsa", permuta_version:"1.4", permuta_anio:"2015", permuta_km:"90000"). Extraé cada dato aunque no esté rotulado, buscando patrones típicos: un número de 4 dígitos cerca del auto suele ser el año, un número seguido de "km" o "kms" es el kilometraje, texto como "1.4", "1.6", "diesel", "nafta", "GNC" suele ser la versión/motorización. Si no hay permuta o no se menciona, tiene_permuta:"no" y dejá los demas campos de permuta vacios. Si el cliente menciona que tiene garante/s o co-firmante, completá tiene_garantes:"si" junto con nombre y DNI del garante si los menciona. Si no hay garante o no se menciona, tiene_garantes:"no" y dejá esos campos vacios. Si el vehiculo buscado dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
+        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","notas":""}]. Si el vehiculo dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
         messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
@@ -422,13 +320,8 @@ app.post('/api/clientes/bulk', async (req, res) => {
       try {
         if (!c.nombre) continue
         await pool.query(
-          `INSERT INTO clientes_busqueda
-           (nombre,telefono,dni,modelo,anio,presupuesto,notas,tiene_permuta,permuta_marca,permuta_modelo,permuta_version,permuta_anio,permuta_km,permuta_color,permuta_valor,tiene_garantes,garante_nombre,garante_dni)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-          [c.nombre, c.telefono||'', c.dni||'', c.modelo||'', c.anio||'', c.presupuesto||'', c.notas||'',
-           c.tiene_permuta||'', c.permuta_marca||'', c.permuta_modelo||'', c.permuta_version||'',
-           c.permuta_anio||'', c.permuta_km||'', c.permuta_color||'', c.permuta_valor||'',
-           c.tiene_garantes||'', c.garante_nombre||'', c.garante_dni||'']
+          'INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,notas) VALUES ($1,$2,$3,$4,$5)',
+          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.notas||'']
         )
         guardados++
       } catch(e) { errores++ }
@@ -444,7 +337,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       }
     }
 
-    res.json({ ok: true, guardados, errores, matches, clientes })
+    res.json({ ok: true, guardados, errores, matches })
   } catch(e) {
     res.status(500).json({ error: e.message })
   }
@@ -455,35 +348,47 @@ app.post('/api/clientes/bulk', async (req, res) => {
 // ── Función centralizada de búsqueda inteligente ────────────
 async function buscarEnStock(texto) {
   if (!texto || texto.length < 2) return []
-
-  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo','nuevo','nueva'])
-
+  
+  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo'])
+  
   const palabras = texto.split(/\s+/)
     .filter(p => p.length >= 2 && !stopWords.has(p.toLowerCase()) && isNaN(p))
-
+  
   if (palabras.length === 0) return []
 
-  // 1. Traer candidatos: autos que contengan AL MENOS UNA de las palabras buscadas
-  //    en marca, modelo o versión (sin importar en qué campo esté cada palabra,
-  //    porque la IA no siempre las guarda en el mismo campo)
-  const orClauses = palabras.map((_, i) =>
-    `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
-  ).join(' OR ')
-  const params = palabras.map(p => `%${p}%`)
-  const candidatos = await pool.query(`SELECT * FROM stock WHERE ${orClauses} ORDER BY marca, modelo`, params)
-  if (candidatos.rows.length === 0) return []
+  // 1. Búsqueda exacta del texto completo contra marca+modelo
+  const textoLimpio = palabras.join(' ')
+  const r0 = await pool.query(
+    `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1)`,
+    [`%${textoLimpio}%`]
+  )
+  if (r0.rows.length > 0) return r0.rows
 
-  // 2. Puntuar cada auto según cuántas palabras de la búsqueda contiene
-  //    (sumando marca+modelo+version), y quedarnos con los mejor puntuados
-  const scored = candidatos.rows.map(r => {
-    const campo = `${r.marca||''} ${r.modelo||''} ${r.version||''}`.toLowerCase()
-    const score = palabras.filter(p => campo.includes(p.toLowerCase())).length
-    return { row: r, score }
-  })
-  const maxScore = Math.max(...scored.map(s => s.score))
-  // Si hay 2+ palabras relevantes, exigimos que matcheen al menos 2 (o todas, si solo hay 1)
-  const minScore = palabras.length >= 2 ? Math.min(2, maxScore) : 1
-  return scored.filter(s => s.score >= minScore).sort((a, b) => b.score - a.score).map(s => s.row)
+  // 2. Si hay 2+ palabras: buscar que TODAS las palabras aparezcan en marca+modelo
+  if (palabras.length >= 2) {
+    let whereClause = palabras.map((_, i) => 
+      `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
+    ).join(' AND ')
+    const params = palabras.map(p => `%${p}%`)
+    const r1 = await pool.query(`SELECT * FROM stock WHERE ${whereClause} ORDER BY marca, modelo`, params)
+    if (r1.rows.length > 0) return r1.rows
+  }
+
+  // 3. Solo si hay 1 palabra: buscar por modelo exacto (no por marca sola)
+  if (palabras.length === 1) {
+    const r2 = await pool.query(
+      `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
+      [`%${palabras[0]}%`]
+    )
+    return r2.rows
+  }
+
+  // 4. Fallback: primera palabra solo en modelo (nunca en marca sola)
+  const r3 = await pool.query(
+    `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
+    [`%${palabras[0]}%`]
+  )
+  return r3.rows
 }
 
 // ── Migración: cargar stock hardcodeado a la DB ─────────────
@@ -546,7 +451,7 @@ app.post('/api/migrar-stock', async (req, res) => {
       )
       if (existe.rows.length > 0) { saltados++; continue }
       await pool.query(
-        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
         [a.marca, a.modelo, a.version||'', String(a.anio), Number(a.km)||0, a.color||'', String(a.precio), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', a.ubicacion||'Tutu Automotores']
       )
       guardados++
@@ -560,7 +465,7 @@ app.post('/api/migrar-stock', async (req, res) => {
 app.post('/api/stock/bulk', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
-  const { texto, ubicacion='Tutu Automotores', moneda='ARS', telefono='' } = req.body
+  const { texto, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
   if (!texto) return res.status(400).json({ error: 'Texto requerido' })
   try {
     // Dividir en líneas y procesar en grupos de 30 autos
@@ -590,7 +495,7 @@ app.post('/api/stock/bulk', async (req, res) => {
     }
 
     console.log('Total autos parseados:', todosLosAutos.length)
-    const result = await guardarAutosEnDB(todosLosAutos, ubicacion, telefono)
+    const result = await guardarAutosEnDB(todosLosAutos, ubicacion)
     const matches = await buscarMatchesClientes(todosLosAutos)
     res.json({ ...result, matches })
   } catch(e) { res.status(500).json({ error: e.message }) }
@@ -601,7 +506,7 @@ app.post('/api/stock/bulk', async (req, res) => {
 app.post('/api/stock/bulk-pdf', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
-  const { pdf, ubicacion='Tutu Automotores', moneda='ARS', telefono='' } = req.body
+  const { pdf, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
   if (!pdf) return res.status(400).json({ error: 'PDF requerido' })
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -640,27 +545,26 @@ Formato: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km"
     } catch(e) {
       return res.status(400).json({ error: 'JSON inválido en PDF: ' + e.message })
     }
-    const result = await guardarAutosEnDB(autos, ubicacion, telefono)
+    const result = await guardarAutosEnDB(autos, ubicacion)
     const matches = await buscarMatchesClientes(autos)
     res.json({ ...result, matches })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Helpers compartidos ──────────────────────────────────────
-async function guardarAutosEnDB(autos, ubicacion, telefono='') {
+async function guardarAutosEnDB(autos, ubicacion) {
   let guardados = 0, saltados = 0, errores = 0
   for (const a of autos) {
-    if (!a.modelo) { errores++; continue }
-    var marca = a.marca || '';
+    if (!a.marca || !a.modelo) { errores++; continue }
     try {
       const existe = await pool.query(
         'SELECT id FROM stock WHERE LOWER(marca)=LOWER($1) AND LOWER(modelo)=LOWER($2) AND anio=$3 AND LOWER(ubicacion)=LOWER($4)',
-        [marca, a.modelo, String(a.anio||''), ubicacion]
+        [a.marca, a.modelo, String(a.anio||''), ubicacion]
       )
       if (existe.rows.length > 0) { saltados++; continue }
       await pool.query(
-        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
-        [marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion, telefono]
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+        [a.marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion]
       )
       guardados++
     } catch(e) { errores++; console.error('Error guardando auto:', e.message) }
@@ -688,7 +592,7 @@ async function buscarMatchesClientes(autos) {
 // ── Clientes busqueda: leer ──────────────────────────────────
 app.get('/api/clientes', async (req, res) => {
   try {
-    const { modelo, anio, vendedor } = req.query
+    const { modelo, anio } = req.query
     let where = ['estado=$1']
     let params = ['Buscando']
     if (modelo) {
@@ -699,69 +603,20 @@ app.get('/api/clientes', async (req, res) => {
       }
     }
     if (anio) { params.push(String(anio)); where.push('anio=$'+params.length) }
-    if (vendedor) { params.push(vendedor); where.push('LOWER(vendedor)=LOWER($'+params.length+')') }
     const q = 'SELECT DISTINCT ON (LOWER(nombre), LOWER(telefono)) * FROM clientes_busqueda WHERE '+where.join(' AND ')+' ORDER BY LOWER(nombre), LOWER(telefono), created_at DESC'
     const r = await pool.query(q, params)
     res.json(r.rows)
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
-// ── Vendedores: compartidos entre todos los dispositivos ─────
-app.get('/api/vendedores', async (req, res) => {
-  try {
-    const r = await pool.query('SELECT nombre FROM vendedores ORDER BY nombre')
-    res.json(r.rows.map(row => row.nombre))
-  } catch(e) { res.status(500).json({ error: e.message }) }
-})
-
-app.post('/api/vendedores', async (req, res) => {
-  try {
-    const nombre = (req.body.nombre || '').trim()
-    if (!nombre) return res.status(400).json({ error: 'Nombre requerido' })
-    await pool.query('INSERT INTO vendedores (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING', [nombre])
-    res.json({ ok: true })
-  } catch(e) { res.status(500).json({ error: e.message }) }
-})
-
-app.patch('/api/vendedores/:nombreViejo', async (req, res) => {
-  try {
-    const nombreViejo = req.params.nombreViejo
-    const nombreNuevo = (req.body.nombre || '').trim()
-    if (!nombreNuevo) return res.status(400).json({ error: 'Nombre requerido' })
-    await pool.query('UPDATE vendedores SET nombre=$1 WHERE LOWER(nombre)=LOWER($2)', [nombreNuevo, nombreViejo])
-    // Actualizar también los leads que ya tenía asignados, para que no se desasignen
-    await pool.query('UPDATE clientes_busqueda SET vendedor=$1 WHERE LOWER(vendedor)=LOWER($2)', [nombreNuevo, nombreViejo])
-    res.json({ ok: true })
-  } catch(e) { res.status(500).json({ error: e.message }) }
-})
-
-app.delete('/api/vendedores/:nombre', async (req, res) => {
-  try {
-    const nombre = req.params.nombre
-    await pool.query('DELETE FROM vendedores WHERE LOWER(nombre)=LOWER($1)', [nombre])
-    // Los leads que tenía asignados quedan como "sin asignar"
-    await pool.query(`UPDATE clientes_busqueda SET vendedor='' WHERE LOWER(vendedor)=LOWER($1)`, [nombre])
-    res.json({ ok: true })
-  } catch(e) { res.status(500).json({ error: e.message }) }
-})
-
 // ── Clientes busqueda: guardar ───────────────────────────────
 app.post('/api/clientes', async (req, res) => {
   try {
-    const {
-      nombre, telefono='', dni='', marca='', modelo, anio='', presupuesto='', notas='', asesor='',
-      tiene_permuta='', permuta_marca='', permuta_modelo='', permuta_version='',
-      permuta_anio='', permuta_km='', permuta_color='', permuta_valor='',
-      tiene_garantes='', garante_nombre='', garante_dni=''
-    } = req.body
+    const { nombre, telefono='', marca='', modelo, anio='', presupuesto='', notas='', asesor='' } = req.body
     if (!nombre || !modelo) return res.status(400).json({ error: 'Nombre y modelo requeridos' })
     await pool.query(
-      `INSERT INTO clientes_busqueda
-       (nombre,telefono,dni,marca,modelo,anio,presupuesto,notas,asesor,tiene_permuta,permuta_marca,permuta_modelo,permuta_version,permuta_anio,permuta_km,permuta_color,permuta_valor,tiene_garantes,garante_nombre,garante_dni)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
-      [nombre, telefono, dni, marca, modelo, String(anio), String(presupuesto), notas, asesor,
-       tiene_permuta, permuta_marca, permuta_modelo, permuta_version, String(permuta_anio), String(permuta_km), permuta_color, String(permuta_valor),
-       tiene_garantes, garante_nombre, garante_dni]
+      'INSERT INTO clientes_busqueda (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor]
     )
     // Buscar si hay match en stock
     const stockMatch = await pool.query(
@@ -775,58 +630,17 @@ app.post('/api/clientes', async (req, res) => {
 // ── Clientes busqueda: marcar encontrado ─────────────────────
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
-    const {
-      estado, vendedor, calificacion, presupuesto, dni,
-      tiene_permuta, permuta_marca, permuta_modelo, permuta_version,
-      permuta_anio, permuta_km, permuta_color, permuta_valor,
-      monto_galicia, monto_bancor, monto_nacion, monto_santander, monto_mg,
-      tiene_garantes, garante_nombre, garante_dni,
-      estado_lead, observaciones
-    } = req.body
+    const { estado, vendedor, calificacion } = req.body
     const sets = []
     const params = []
     if (estado !== undefined) { params.push(estado); sets.push('estado=$'+params.length) }
     if (vendedor !== undefined) { params.push(vendedor); sets.push('vendedor=$'+params.length) }
     if (calificacion !== undefined) { params.push(calificacion); sets.push('calificacion=$'+params.length) }
-    if (presupuesto !== undefined) { params.push(String(presupuesto)); sets.push('presupuesto=$'+params.length) }
-    if (dni !== undefined) { params.push(dni); sets.push('dni=$'+params.length) }
-    if (tiene_permuta !== undefined) { params.push(tiene_permuta); sets.push('tiene_permuta=$'+params.length) }
-    if (permuta_marca !== undefined) { params.push(permuta_marca); sets.push('permuta_marca=$'+params.length) }
-    if (permuta_modelo !== undefined) { params.push(permuta_modelo); sets.push('permuta_modelo=$'+params.length) }
-    if (permuta_version !== undefined) { params.push(permuta_version); sets.push('permuta_version=$'+params.length) }
-    if (permuta_anio !== undefined) { params.push(String(permuta_anio)); sets.push('permuta_anio=$'+params.length) }
-    if (permuta_km !== undefined) { params.push(String(permuta_km)); sets.push('permuta_km=$'+params.length) }
-    if (permuta_color !== undefined) { params.push(permuta_color); sets.push('permuta_color=$'+params.length) }
-    if (permuta_valor !== undefined) { params.push(String(permuta_valor)); sets.push('permuta_valor=$'+params.length) }
-    if (monto_galicia !== undefined) { params.push(String(monto_galicia)); sets.push('monto_galicia=$'+params.length) }
-    if (monto_bancor !== undefined) { params.push(String(monto_bancor)); sets.push('monto_bancor=$'+params.length) }
-    if (monto_nacion !== undefined) { params.push(String(monto_nacion)); sets.push('monto_nacion=$'+params.length) }
-    if (monto_santander !== undefined) { params.push(String(monto_santander)); sets.push('monto_santander=$'+params.length) }
-    if (monto_mg !== undefined) { params.push(String(monto_mg)); sets.push('monto_mg=$'+params.length) }
-    if (tiene_garantes !== undefined) { params.push(tiene_garantes); sets.push('tiene_garantes=$'+params.length) }
-    if (garante_nombre !== undefined) { params.push(garante_nombre); sets.push('garante_nombre=$'+params.length) }
-    if (garante_dni !== undefined) { params.push(garante_dni); sets.push('garante_dni=$'+params.length) }
-    if (estado_lead !== undefined) { params.push(estado_lead); sets.push('estado_lead=$'+params.length) }
-    if (observaciones !== undefined) { params.push(observaciones); sets.push('observaciones=$'+params.length) }
     if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
     params.push(req.params.id)
     sets.push('updated_at=NOW()')
     await pool.query('UPDATE clientes_busqueda SET '+sets.join(',')+' WHERE id=$'+params.length, params)
     res.json({ ok: true })
-  } catch(e) { res.status(500).json({ error: e.message }) }
-})
-
-// ── Eliminar cliente (borra también duplicados: mismo nombre+teléfono) ──
-app.delete('/api/clientes/:id', async (req, res) => {
-  try {
-    const actual = await pool.query('SELECT nombre, telefono FROM clientes_busqueda WHERE id=$1', [req.params.id])
-    if (actual.rows.length === 0) return res.json({ ok: true, eliminados: 0 })
-    const { nombre, telefono } = actual.rows[0]
-    const r = await pool.query(
-      'DELETE FROM clientes_busqueda WHERE LOWER(nombre)=LOWER($1) AND LOWER(telefono)=LOWER($2)',
-      [nombre, telefono || '']
-    )
-    res.json({ ok: true, eliminados: r.rowCount })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -889,6 +703,91 @@ app.post('/api/buscar', async (req, res) => {
     res.json(await response.json())
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
+
+
+// ── INFOAUTO ─────────────────────────────────────────────────────────────────
+const INFOAUTO_API   = 'https://api.infoauto.com.ar/cars'
+const INFOAUTO_EMAIL = process.env.INFOAUTO_EMAIL || 'ventas@tutuautomotores.com'
+const INFOAUTO_PASS  = process.env.INFOAUTO_PASS  || 'Tutunadiecomotutu'
+
+let infoautoToken    = null
+let infoautoExpiry   = 0
+let infoautoRefresh  = null
+
+async function infoautoLogin() {
+  const r = await fetch(`${INFOAUTO_API}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: INFOAUTO_EMAIL, password: INFOAUTO_PASS })
+  })
+  if (!r.ok) throw new Error('InfoAuto login falló: ' + r.status)
+  const d = await r.json()
+  infoautoToken   = d.access_token
+  infoautoRefresh = d.refresh_token
+  infoautoExpiry  = Date.now() + 55 * 60 * 1000 // 55 min
+  console.log('✅ InfoAuto autenticado')
+  return infoautoToken
+}
+
+async function infoautoRefreshToken() {
+  try {
+    const r = await fetch(`${INFOAUTO_API}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${infoautoRefresh}` }
+    })
+    if (!r.ok) return infoautoLogin()
+    const d = await r.json()
+    infoautoToken  = d.access_token
+    infoautoExpiry = Date.now() + 55 * 60 * 1000
+    return infoautoToken
+  } catch(e) { return infoautoLogin() }
+}
+
+async function getInfoautoToken() {
+  if (!infoautoToken || Date.now() > infoautoExpiry) {
+    if (infoautoRefresh && infoautoToken) return infoautoRefreshToken()
+    return infoautoLogin()
+  }
+  return infoautoToken
+}
+
+async function infoautoFetch(path) {
+  const token = await getInfoautoToken()
+  const r = await fetch(`${INFOAUTO_API}${path}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  if (r.status === 401) {
+    // Token expirado, hacer login de nuevo
+    await infoautoLogin()
+    const r2 = await fetch(`${INFOAUTO_API}${path}`, {
+      headers: { 'Authorization': `Bearer ${infoautoToken}` }
+    })
+    return r2.json()
+  }
+  return r.json()
+}
+
+// Buscar autos en InfoAuto
+app.get('/api/infoauto/search', async (req, res) => {
+  try {
+    const { q, page = 1, pageSize = 10 } = req.query
+    if (!q) return res.status(400).json({ error: 'Falta query' })
+    const data = await infoautoFetch(`/auth/snapshots/search?query_string=${encodeURIComponent(q)}&page=${page}&pageSize=${pageSize}`)
+    res.json(data)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// Ver precio de un modelo especifico
+app.get('/api/infoauto/precio/:id', async (req, res) => {
+  try {
+    const data = await infoautoFetch(`/auth/snapshots/${req.params.id}`)
+    res.json(data)
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// Iniciar sesion en InfoAuto al arrancar
+infoautoLogin().catch(e => console.error('⚠️ InfoAuto login inicial falló:', e.message))
+// ── FIN INFOAUTO ──────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`))
