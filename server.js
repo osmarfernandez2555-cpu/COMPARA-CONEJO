@@ -789,5 +789,58 @@ app.get('/api/infoauto/precio/:id', async (req, res) => {
 infoautoLogin().catch(e => console.error('⚠️ InfoAuto login inicial falló:', e.message))
 // ── FIN INFOAUTO ──────────────────────────────────────────────────────────────
 
+
+// ── VENDEDORES ────────────────────────────────────────────────────────────────
+// Tabla de vendedores en SQLite
+db.prepare(`CREATE TABLE IF NOT EXISTS vendedores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT UNIQUE NOT NULL
+)`).run();
+
+// Insertar vendedores por defecto si la tabla está vacía
+const countVend = db.prepare('SELECT COUNT(*) as c FROM vendedores').get();
+if (countVend.c === 0) {
+  ['Joaquin','Agustin','Rodrigo','Nahuel','Lucas','Matias'].forEach(n => {
+    db.prepare('INSERT OR IGNORE INTO vendedores (nombre) VALUES (?)').run(n);
+  });
+}
+
+// GET /api/vendedores — lista de nombres
+app.get('/api/vendedores', (req, res) => {
+  const rows = db.prepare('SELECT nombre FROM vendedores ORDER BY nombre').all();
+  res.json(rows.map(r => r.nombre));
+});
+
+// POST /api/vendedores — agregar vendedor
+app.post('/api/vendedores', (req, res) => {
+  const { nombre } = req.body;
+  if (!nombre) return res.status(400).json({ error: 'Falta nombre' });
+  try {
+    db.prepare('INSERT INTO vendedores (nombre) VALUES (?)').run(nombre.trim());
+    res.json({ ok: true });
+  } catch(e) { res.status(409).json({ error: 'Ya existe' }); }
+});
+
+// PATCH /api/vendedores/:nombre — renombrar vendedor
+app.patch('/api/vendedores/:nombre', (req, res) => {
+  const { nombre } = req.params;
+  const { nombre: nuevo } = req.body;
+  if (!nuevo) return res.status(400).json({ error: 'Falta nombre nuevo' });
+  db.prepare('UPDATE vendedores SET nombre=? WHERE nombre=?').run(nuevo.trim(), nombre);
+  // Actualizar leads asignados
+  db.prepare('UPDATE clientes_busqueda SET vendedor=? WHERE vendedor=?').run(nuevo.trim(), nombre);
+  res.json({ ok: true });
+});
+
+// DELETE /api/vendedores/:nombre — eliminar vendedor
+app.delete('/api/vendedores/:nombre', (req, res) => {
+  const { nombre } = req.params;
+  db.prepare('DELETE FROM vendedores WHERE nombre=?').run(nombre);
+  // Desasignar leads
+  db.prepare("UPDATE clientes_busqueda SET vendedor='' WHERE vendedor=?").run(nombre);
+  res.json({ ok: true });
+});
+// ── FIN VENDEDORES ────────────────────────────────────────────────────────────
+
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`))
