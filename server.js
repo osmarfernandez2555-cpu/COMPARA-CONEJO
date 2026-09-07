@@ -785,7 +785,11 @@ app.get('/api/infoauto/search', async (req, res) => {
 // Ver precio de un modelo especifico
 app.get('/api/infoauto/precio/:id', async (req, res) => {
   try {
-    const data = await infoautoFetch(`/auth/snapshots/${req.params.id}`)
+    const token = await getInfoautoToken()
+    const r = await fetch(`${INFOAUTO_API}/pub/models/${req.params.id}/prices/`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const data = await r.json()
     res.json(data)
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
