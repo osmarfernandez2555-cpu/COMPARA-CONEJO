@@ -221,7 +221,8 @@ Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
 
 Cuando el usuario diga que un cliente busca un auto ("X busca", "X quiere", "X está buscando"):
 • Extraé nombre del cliente, modelo, año, teléfono, DNI y presupuesto si lo hay
-• Si el cliente entrega un auto propio como parte de pago (permuta), extraé tiene_permuta:"si" y los datos del auto que entrega (marca, modelo, versión, año, km, color, valor estimado si lo menciona). Si no hay permuta, tiene_permuta:"no"
+• Si el cliente entrega un auto propio como parte de pago (permuta), extraé tiene_permuta:"si" y TODOS los datos del auto que entrega que mencione: marca, modelo, versión/motorización, año, km, color, valor estimado — aunque vengan mezclados en la misma frase sin etiquetas (ej: "un Corsa 1.4 2015 con 90000 km"). Si no hay permuta, tiene_permuta:"no"
+• Si el cliente menciona un RANGO de años para lo que busca (ej: "de 2013 a 2018"), guardalo en "anio" como "2013-2018", no un solo año inventado.
 • Si el cliente menciona garante/s o co-firmante, extraé tiene_garantes:"si" junto con nombre y DNI del garante si los menciona. Si no, tiene_garantes:"no"
 • Confirmá con un mensaje
 • Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","dni":"","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":"","tiene_permuta":"no","permuta_marca":"","permuta_modelo":"","permuta_version":"","permuta_anio":"","permuta_km":"","permuta_color":"","permuta_valor":"","tiene_garantes":"no","garante_nombre":"","garante_dni":""}]
@@ -345,16 +346,42 @@ app.get('/api/match', async (req, res) => {
       const stockRows = await buscarEnStock(modelo)
       let filtered = stockRows
       if (anio) {
-        const anioNum = Number(anio)
+        // Soporta rangos de año: "2013-2018", "2013 a 2018", "2013 - 2018"
+        const rango = String(anio).match(/(\d{4})\s*(?:-|a)\s*(\d{4})/i)
+        let anioLo, anioHi
+        if (rango) {
+          anioLo = Math.min(Number(rango[1]), Number(rango[2]))
+          anioHi = Math.max(Number(rango[1]), Number(rango[2]))
+        } else {
+          const soloAnio = Number(String(anio).match(/\d{4}/)?.[0] || anio)
+          anioLo = anioHi = soloAnio
+        }
         filtered = stockRows
-          .map(r => ({ ...r, _anioExacto: r.anio === String(anio), _diffAnio: isNaN(Number(r.anio)) ? 99 : Math.abs(Number(r.anio) - anioNum) }))
+          .map(r => {
+            const rAnio = Number(r.anio)
+            const dentroDeRango = !isNaN(rAnio) && rAnio >= anioLo && rAnio <= anioHi
+            let diff
+            if (isNaN(rAnio) || isNaN(anioLo)) diff = 99
+            else if (dentroDeRango) diff = 0
+            else diff = Math.min(Math.abs(rAnio - anioLo), Math.abs(rAnio - anioHi))
+            return { ...r, _anioExacto: dentroDeRango, _diffAnio: diff }
+          })
           .filter(r => r._diffAnio <= 8)
           .sort((a, b) => a._diffAnio - b._diffAnio)
       }
       return res.json(filtered)
     }
     
-    // Solo año
+    // Solo año (también soporta rango)
+    {
+      const rango = String(anio).match(/(\d{4})\s*(?:-|a)\s*(\d{4})/i)
+      if (rango) {
+        const lo = Math.min(Number(rango[1]), Number(rango[2]))
+        const hi = Math.max(Number(rango[1]), Number(rango[2]))
+        const result = await pool.query('SELECT * FROM stock WHERE anio::int BETWEEN $1 AND $2 ORDER BY marca, modelo', [lo, hi])
+        return res.json(result.rows)
+      }
+    }
     const result = await pool.query('SELECT * FROM stock WHERE anio=$1 ORDER BY marca, modelo', [String(anio)])
     res.json(result.rows)
   } catch(e) { res.status(500).json({ error: e.message }) }
@@ -378,7 +405,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","dni":"30123456","modelo":"Gol Trend","anio":"","presupuesto":"15000000","notas":"","tiene_permuta":"si","permuta_marca":"Chevrolet","permuta_modelo":"Corsa","permuta_version":"","permuta_anio":"2015","permuta_km":"120000","permuta_color":"Gris","permuta_valor":"3000000","tiene_garantes":"si","garante_nombre":"Maria Lopez","garante_dni":"28123456"}]. Extraé el presupuesto/dinero disponible si lo hay, y el DNI del cliente si lo menciona. Si el cliente menciona que tiene un auto para entregar, permuta, parte de pago con vehiculo o similar, completá tiene_permuta:"si" junto con los datos del auto que entrega (marca, modelo, version, año, km, color y valor estimado si lo menciona). Si no hay permuta o no se menciona, tiene_permuta:"no" y dejá los demas campos de permuta vacios. Si el cliente menciona que tiene garante/s o co-firmante, completá tiene_garantes:"si" junto con nombre y DNI del garante si los menciona. Si no hay garante o no se menciona, tiene_garantes:"no" y dejá esos campos vacios. Si el vehiculo buscado dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
+        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","dni":"30123456","modelo":"Gol Trend","anio":"","presupuesto":"15000000","notas":"","tiene_permuta":"si","permuta_marca":"Chevrolet","permuta_modelo":"Corsa","permuta_version":"","permuta_anio":"2015","permuta_km":"120000","permuta_color":"Gris","permuta_valor":"3000000","tiene_garantes":"si","garante_nombre":"Maria Lopez","garante_dni":"28123456"}]. Extraé el presupuesto/dinero disponible si lo hay, y el DNI del cliente si lo menciona. Si el auto buscado menciona un RANGO de años (ej: "de 2013 a 2018", "entre 2015 y 2020", "2016-2019"), poné ese rango en el campo "anio" con el formato exacto "AAAA-AAAA" (ej: "2013-2018"), nunca un solo año inventado. Si es un solo año, poné solo ese año. Si el cliente menciona que tiene un auto para entregar, permuta, parte de pago con vehiculo o similar, completá tiene_permuta:"si" junto con TODOS los datos del auto que entrega que aparezcan en el texto: marca, modelo, version/motorización, año, kilometraje, color y valor estimado. IMPORTANTE: estos datos de la permuta suelen venir mezclados en la misma frase sin etiquetas explícitas (ej: "entrega un Corsa 1.4 2015 con 90000 km" → permuta_modelo:"Corsa", permuta_version:"1.4", permuta_anio:"2015", permuta_km:"90000"). Extraé cada dato aunque no esté rotulado, buscando patrones típicos: un número de 4 dígitos cerca del auto suele ser el año, un número seguido de "km" o "kms" es el kilometraje, texto como "1.4", "1.6", "diesel", "nafta", "GNC" suele ser la versión/motorización. Si no hay permuta o no se menciona, tiene_permuta:"no" y dejá los demas campos de permuta vacios. Si el cliente menciona que tiene garante/s o co-firmante, completá tiene_garantes:"si" junto con nombre y DNI del garante si los menciona. Si no hay garante o no se menciona, tiene_garantes:"no" y dejá esos campos vacios. Si el vehiculo buscado dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
         messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
