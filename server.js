@@ -790,6 +790,8 @@ app.get('/api/infoauto/precio/:id', async (req, res) => {
 
 // Iniciar sesion en InfoAuto al arrancar
 infoautoLogin().catch(e => console.error('⚠️ InfoAuto login inicial falló:', e.message))
+console.log('✅ Endpoint /api/infoauto/search registrado')
+console.log('✅ Endpoint /api/infoauto/precio/:id registrado')
 // ── FIN INFOAUTO ──────────────────────────────────────────────────────────────
 
 
