@@ -41,6 +41,12 @@ async function initDB() {
   `)
   // Agregar columnas nuevas si no existen
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS presupuesto TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_permuta TEXT DEFAULT 'no'`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS auto_permuta TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT 'no'`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni_garante TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
 }
@@ -346,7 +352,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Formato: [{"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"","notas":""}]. Si el vehiculo dice "No especificado", "A definir" o similar, pone modelo vacío. SOLO el array JSON.',
+        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Cada objeto debe tener EXACTAMENTE estos campos: {"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"2018","presupuesto":"12000000","dni":"12345678","tiene_permuta":"si","auto_permuta":"Ford Focus 2015","tiene_garantes":"si","dni_garante":"87654321","notas":""}. Reglas: modelo es el auto que BUSCA (marca+modelo+version si los hay). anio puede ser un rango como 2015-2018. presupuesto es el monto en pesos o dolares que tiene disponible (solo numeros). dni es el DNI del cliente. tiene_permuta es si o no. auto_permuta es el auto que da en parte de pago. tiene_garantes es si o no. dni_garante es el DNI del garante. Si no hay dato deja el campo en cadena vacia. Si el vehiculo dice "No especificado" o similar, pone modelo vacio. SOLO el array JSON sin texto ni markdown.',
         messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
@@ -363,8 +369,9 @@ app.post('/api/clientes/bulk', async (req, res) => {
       try {
         if (!c.nombre) continue
         await pool.query(
-          'INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,notas) VALUES ($1,$2,$3,$4,$5)',
-          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.notas||'']
+          `INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,presupuesto,dni,tiene_permuta,auto_permuta,tiene_garantes,dni_garante,notas)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.presupuesto||'', c.dni||'', c.tiene_permuta||'no', c.auto_permuta||'', c.tiene_garantes||'no', c.dni_garante||'', c.notas||'']
         )
         guardados++
       } catch(e) { errores++ }
@@ -380,7 +387,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       }
     }
 
-    res.json({ ok: true, guardados, errores, matches })
+    res.json({ ok: true, guardados, errores, matches, clientes })
   } catch(e) {
     res.status(500).json({ error: e.message })
   }
