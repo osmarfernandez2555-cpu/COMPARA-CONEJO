@@ -48,6 +48,22 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT 'no'`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni_garante TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS observaciones TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS estado_lead TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS bancos TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_galicia TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_bancor TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_nacion TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_santander TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_mg TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS presupuesto TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_permuta TEXT DEFAULT 'no'`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS auto_permuta TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT 'no'`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni_garante TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -680,16 +696,19 @@ app.post('/api/clientes', async (req, res) => {
 // ── Clientes busqueda: marcar encontrado ─────────────────────
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
-    const { estado, vendedor, calificacion } = req.body
+    const campos = ['estado','vendedor','calificacion','observaciones','estado_lead','bancos','monto_galicia','monto_bancor','monto_nacion','monto_santander','monto_mg']
     const sets = []
     const params = []
-    if (estado !== undefined) { params.push(estado); sets.push('estado=$'+params.length) }
-    if (vendedor !== undefined) { params.push(vendedor); sets.push('vendedor=$'+params.length) }
-    if (calificacion !== undefined) { params.push(calificacion); sets.push('calificacion=$'+params.length) }
+    campos.forEach(campo => {
+      if (req.body[campo] !== undefined) {
+        params.push(req.body[campo])
+        sets.push(campo + '=$' + params.length)
+      }
+    })
     if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
-    params.push(req.params.id)
     sets.push('updated_at=NOW()')
-    await pool.query('UPDATE clientes_busqueda SET '+sets.join(',')+' WHERE id=$'+params.length, params)
+    params.push(req.params.id)
+    await pool.query('UPDATE clientes_busqueda SET ' + sets.join(',') + ' WHERE id=$' + params.length, params)
     res.json({ ok: true })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
