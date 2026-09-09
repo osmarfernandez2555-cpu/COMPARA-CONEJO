@@ -47,6 +47,7 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS auto_permuta TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT 'no'`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni_garante TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS nombre_garante TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS calificacion TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS vendedor TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS observaciones TEXT DEFAULT ''`).catch(()=>{})
@@ -63,6 +64,7 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS auto_permuta TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT 'no'`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni_garante TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS nombre_garante TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
   console.log('✅ DB lista')
 }
@@ -368,7 +370,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: 'Sos un parser de datos. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Cada objeto debe tener EXACTAMENTE estos campos: {"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"2018","presupuesto":"12000000","dni":"12345678","tiene_permuta":"si","auto_permuta":"Ford Focus 2015","tiene_garantes":"si","dni_garante":"87654321","notas":""}. Reglas: modelo es el auto que BUSCA (marca+modelo+version si los hay). anio puede ser un rango como 2015-2018. presupuesto es el monto en pesos o dolares que tiene disponible (solo numeros). dni es el DNI del cliente. tiene_permuta es si o no. auto_permuta es el auto que da en parte de pago. tiene_garantes es si o no. dni_garante es el DNI del garante. Si no hay dato deja el campo en cadena vacia. Si el vehiculo dice "No especificado" o similar, pone modelo vacio. SOLO el array JSON sin texto ni markdown.',
+        system: 'Sos un parser de datos de clientes de una concesionaria. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Cada objeto debe tener EXACTAMENTE estos campos: {"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"2018","presupuesto":"12000000","dni":"12345678","tiene_permuta":"si","auto_permuta":"Ford Focus 2015","tiene_garantes":"si","dni_garante":"87654321","nombre_garante":"Maria Lopez","notas":""}. REGLAS IMPORTANTES: 1) modelo es el auto que BUSCA el cliente (marca+modelo+version). 2) anio puede ser rango como 2015-2018. 3) presupuesto es el monto disponible en pesos o dolares (solo numeros, sin simbolos). 4) dni es el DNI del CLIENTE (el numero que aparece junto a su nombre o despues de "DNI:"). 5) tiene_garantes es "si" si aparece la palabra "garante" o "garantes" o "aval". 6) dni_garante es el DNI del garante (el numero que aparece junto al nombre del garante o despues de "Garantes:"). 7) nombre_garante es el nombre completo del garante. 8) Si un numero aparece junto al nombre del garante, ese numero es su DNI. 9) tiene_permuta es "si" si menciona permuta, canje o auto en parte de pago. 10) Si no hay dato deja el campo en cadena vacia. 11) Si el vehiculo dice "No especificado" o similar, pone modelo vacio. SOLO el array JSON sin texto ni markdown. EJEMPLO: "Maria Lopez 12345678 | 351999 | Toyota Corolla 2020 | 15 millones | DNI:12345678 | Garantes:Pedro Gomez 87654321" -> dni_garante="87654321", nombre_garante="Pedro Gomez", tiene_garantes="si".',
         messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
@@ -385,9 +387,9 @@ app.post('/api/clientes/bulk', async (req, res) => {
       try {
         if (!c.nombre) continue
         await pool.query(
-          `INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,presupuesto,dni,tiene_permuta,auto_permuta,tiene_garantes,dni_garante,notas)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.presupuesto||'', c.dni||'', c.tiene_permuta||'no', c.auto_permuta||'', c.tiene_garantes||'no', c.dni_garante||'', c.notas||'']
+          `INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,presupuesto,dni,tiene_permuta,auto_permuta,tiene_garantes,dni_garante,nombre_garante,notas)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [c.nombre, c.telefono||'', c.modelo||'', c.anio||'', c.presupuesto||'', c.dni||'', c.tiene_permuta||'no', c.auto_permuta||'', c.tiene_garantes||'no', c.dni_garante||'', c.nombre_garante||'', c.notas||'']
         )
         guardados++
       } catch(e) { errores++ }
