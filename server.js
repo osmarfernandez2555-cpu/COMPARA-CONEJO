@@ -359,8 +359,26 @@ app.post('/api/clientes/bulk', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
   
-  const { texto } = req.body
-  if (!texto) return res.status(400).json({ error: 'Texto requerido' })
+  const { texto: textoRaw } = req.body
+  if (!textoRaw) return res.status(400).json({ error: 'Texto requerido' })
+
+  // Limpiar el texto: juntar lineas que son continuacion de un garante
+  // Si una linea no empieza con nombre+telefono ni con DNI, es continuacion de la anterior
+  const lineas = textoRaw.split('\n')
+  const lineasLimpias = []
+  for (let i = 0; i < lineas.length; i++) {
+    const l = lineas[i].trim()
+    if (!l) { lineasLimpias.push(''); continue; }
+    // Si la linea anterior termina con datos de garante y esta linea parece ser continuacion
+    // (solo tiene nombre y/o DNI sin pipes) -> juntarla con la anterior
+    const esNuevoCliente = /\|/.test(l) || /^\d{8,}/.test(l)
+    if (!esNuevoCliente && lineasLimpias.length > 0 && lineasLimpias[lineasLimpias.length-1]) {
+      lineasLimpias[lineasLimpias.length-1] += ' ' + l
+    } else {
+      lineasLimpias.push(l)
+    }
+  }
+  const texto = lineasLimpias.filter(l => l.trim()).join('\n')
 
   try {
     // Usar Claude para parsear la lista
@@ -370,7 +388,7 @@ app.post('/api/clientes/bulk', async (req, res) => {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: 'Sos un parser de datos de clientes de una concesionaria. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Cada objeto debe tener EXACTAMENTE estos campos: {"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"2018","presupuesto":"12000000","dni":"12345678","tiene_permuta":"si","auto_permuta":"Ford Focus 2015","tiene_garantes":"si","dni_garante":"87654321","nombre_garante":"Maria Lopez","notas":""}. REGLAS IMPORTANTES: 1) modelo es el auto que BUSCA el cliente (marca+modelo+version). 2) anio puede ser rango como 2015-2018. 3) presupuesto es el monto disponible en pesos o dolares (solo numeros, sin simbolos). 4) dni es el DNI del CLIENTE (el numero que aparece junto a su nombre o despues de "DNI:"). 5) tiene_garantes es "si" si aparece la palabra "garante" o "garantes" o "aval". 6) dni_garante es el DNI del garante (el numero que aparece junto al nombre del garante o despues de "Garantes:"). 7) nombre_garante es el nombre completo del garante. 8) Si un numero aparece junto al nombre del garante, ese numero es su DNI. 9) tiene_permuta es "si" si menciona permuta, canje o auto en parte de pago. 10) Si no hay dato deja el campo en cadena vacia. 11) Si el vehiculo dice "No especificado" o similar, pone modelo vacio. SOLO el array JSON sin texto ni markdown. EJEMPLO: "Maria Lopez 12345678 | 351999 | Toyota Corolla 2020 | 15 millones | DNI:12345678 | Garantes:Pedro Gomez 87654321" -> dni_garante="87654321", nombre_garante="Pedro Gomez", tiene_garantes="si".',
+        system: 'Sos un parser de datos de clientes de una concesionaria. Recibís texto con una lista de clientes y sus búsquedas de autos. Devolvés SOLO un JSON array sin texto extra ni markdown. Cada objeto debe tener EXACTAMENTE estos campos: {"nombre":"Juan Perez","telefono":"351123","modelo":"Gol Trend","anio":"2018","presupuesto":"12000000","dni":"12345678","tiene_permuta":"si","auto_permuta":"Ford Focus 2015","tiene_garantes":"si","dni_garante":"87654321","nombre_garante":"Maria Lopez","notas":""}. REGLAS IMPORTANTES: 1) modelo es el auto que BUSCA el cliente (marca+modelo+version). 2) anio puede ser rango como 2015-2018. 3) presupuesto es el monto disponible en pesos o dolares (solo numeros, sin simbolos). 4) dni es el DNI del CLIENTE (el numero que aparece junto a su nombre o despues de "DNI:"). 5) tiene_garantes es "si" si aparece la palabra "garante" o "garantes" o "aval". 6) dni_garante es el DNI del garante (el numero que aparece junto al nombre del garante o despues de "Garantes:"). 7) nombre_garante es el nombre completo del garante. 8) Si un numero aparece junto al nombre del garante, ese numero es su DNI. 9) tiene_permuta es "si" si menciona permuta, canje o auto en parte de pago. 10) Si no hay dato deja el campo en cadena vacia. 11) Si el vehiculo dice "No especificado" o similar, pone modelo vacio. SOLO el array JSON sin texto ni markdown. IMPORTANTE: si hay saltos de linea dentro de los datos de garantes, unilos en un solo campo. dni_garante y nombre_garante pueden tener multiples garantes separados por coma. EJEMPLO: "DNI:34988826 | Garantes:Cufre Sebastiano 32314376 Ana Graciela 13150923" -> dni_garante="32314376, 13150923", nombre_garante="Cufre Sebastiano, Ana Graciela", tiene_garantes="si". EJEMPLO2: "Maria Lopez 12345678 | 351999 | Toyota Corolla 2020 | 15 millones | DNI:12345678 | Garantes:Pedro Gomez 87654321" -> dni_garante="87654321", nombre_garante="Pedro Gomez", tiene_garantes="si".',
         messages: [{ role: 'user', content: 'Parsea esta lista:\n' + texto }]
       })
     })
