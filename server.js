@@ -339,16 +339,41 @@ app.get('/api/match', async (req, res) => {
   try {
     const { modelo, anio } = req.query
     if (!modelo && !anio) return res.status(400).json({ error: 'Ingresá modelo y/o año' })
-    
-    if (modelo) {
-      const stockRows = await buscarEnStock(modelo)
-      const filtered = anio ? stockRows.filter(r => r.anio === String(anio)) : stockRows
-      return res.json(filtered)
+
+    let stockRows = modelo ? await buscarEnStock(modelo) : []
+
+    if (!modelo && anio) {
+      // Solo año: buscar ±8 años
+      const anioNum = parseInt(anio)
+      const result = await pool.query(
+        'SELECT * FROM stock WHERE anio::integer BETWEEN $1 AND $2 ORDER BY marca, modelo',
+        [anioNum - 8, anioNum + 8]
+      )
+      return res.json(result.rows)
     }
-    
-    // Solo año
-    const result = await pool.query('SELECT * FROM stock WHERE anio=$1 ORDER BY marca, modelo', [String(anio)])
-    res.json(result.rows)
+
+    if (anio) {
+      const anioNum = parseInt(anio)
+      const RANGO = 8
+
+      // Separar en exactos y aproximados
+      const exactos = stockRows.filter(r => {
+        const a = parseInt(r.anio)
+        return !isNaN(a) && Math.abs(a - anioNum) <= 1
+      })
+      const aprox = stockRows.filter(r => {
+        const a = parseInt(r.anio)
+        return !isNaN(a) && Math.abs(a - anioNum) > 1 && Math.abs(a - anioNum) <= RANGO
+      })
+      const sinAnio = stockRows.filter(r => isNaN(parseInt(r.anio)))
+
+      // Ordenar aprox por cercanía al año buscado
+      aprox.sort((a, b) => Math.abs(parseInt(a.anio) - anioNum) - Math.abs(parseInt(b.anio) - anioNum))
+
+      return res.json([...exactos, ...aprox, ...sinAnio])
+    }
+
+    res.json(stockRows)
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
