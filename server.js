@@ -208,9 +208,12 @@ Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
 [GUARDAR_STOCK:{"marca":"Ford","modelo":"Ranger","version":"XLT 4x4","anio":"2022","km":45000,"color":"Blanca","precio":"58000000","moneda":"ARS","estado":"Disponible","notas":"","ubicacion":"Tutu Automotores"}]
 
 Cuando el usuario diga que un cliente busca un auto ("X busca", "X quiere", "X está buscando"):
-• Extraé nombre del cliente, modelo, año, teléfono si lo hay
+• Extraé nombre del cliente, modelo, año, teléfono, DNI y presupuesto si lo hay
+• Si el cliente entrega un auto propio como parte de pago (permuta), extraé tiene_permuta:"si" y describí en "auto_permuta" TODOS los datos del auto que entrega en una sola frase (marca, modelo, versión/motorización, año, km, color, valor estimado si lo menciona) — ej: "Chevrolet Corsa 1.4 2015, 90000 km". Si no hay permuta, tiene_permuta:"no" y auto_permuta vacío
+• Si el cliente menciona garante/s o co-firmante, extraé tiene_garantes:"si" junto con nombre_garante y dni_garante si los menciona. Si no, tiene_garantes:"no"
+• Si el cliente menciona un RANGO de años para lo que busca (ej: "de 2013 a 2018"), guardalo en "anio" como "2013-2018", no un solo año inventado.
 • Confirmá con un mensaje
-• Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":""}]
+• Al FINAL agregá: [GUARDAR_CLIENTE:{"nombre":"Juan Perez","telefono":"351-1234567","dni":"","modelo":"Gol Trend","anio":"2012","presupuesto":"","notas":"","asesor":"","tiene_permuta":"no","auto_permuta":"","tiene_garantes":"no","nombre_garante":"","dni_garante":""}]
 
 Cuando el usuario diga "eliminá", "borrá" o "sacá" un auto:
 • Confirmá con un mensaje claro
@@ -284,12 +287,18 @@ ${lineas}`
 
     const data = await response.json()
 
+    if (!response.ok) {
+      console.error('❌ Error de Anthropic API:', response.status, JSON.stringify(data))
+      return res.status(response.status).json({ error: data.error || data })
+    }
+
     // Procesar comandos de stock en la respuesta
     if (data.content?.[0]?.text) {
       let reply = data.content[0].text
 
       const guardar = reply.match(/\[GUARDAR_STOCK:(\{[^\]]+\})\]/)
       const eliminar = reply.match(/\[ELIMINAR_STOCK:(\{[^\]]+\})\]/)
+      const guardarCliente = reply.match(/\[GUARDAR_CLIENTE:(\{[^\]]+\})\]/)
 
       if (guardar) {
         try {
@@ -325,6 +334,25 @@ ${lineas}`
           console.log('🗑️ Stock eliminado:', marca, modelo, anio)
         } catch(e) { console.error('Error eliminando stock:', e.message) }
         data.content[0].text = data.content[0].text.replace(/\[ELIMINAR_STOCK:[^\]]+\]/g, '').trim()
+      }
+
+      if (guardarCliente) {
+        try {
+          const cli = JSON.parse(guardarCliente[1])
+          const {
+            nombre, telefono='', dni='', modelo='', anio='', presupuesto='', notas='', asesor='',
+            tiene_permuta='no', auto_permuta='', tiene_garantes='no', nombre_garante='', dni_garante=''
+          } = cli
+          if (nombre) {
+            await pool.query(
+              `INSERT INTO clientes_busqueda (nombre,telefono,modelo,anio,presupuesto,dni,tiene_permuta,auto_permuta,tiene_garantes,dni_garante,nombre_garante,notas,asesor)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+              [nombre, telefono, modelo, String(anio), String(presupuesto), dni, tiene_permuta, auto_permuta, tiene_garantes, dni_garante, nombre_garante, notas, asesor]
+            )
+            console.log('✅ Cliente guardado:', nombre, modelo)
+          }
+        } catch(e) { console.error('Error guardando cliente:', e.message) }
+        data.content[0].text = data.content[0].text.replace(/\[GUARDAR_CLIENTE:[^\]]+\]/g, '').trim()
       }
     }
 
@@ -460,47 +488,35 @@ app.post('/api/clientes/bulk', async (req, res) => {
 // ── Función centralizada de búsqueda inteligente ────────────
 async function buscarEnStock(texto) {
   if (!texto || texto.length < 2) return []
-  
-  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo'])
-  
+
+  const stopWords = new Set(['con','los','las','del','una','por','para','que','año','auto','autos','vehiculo','nuevo','nueva'])
+
   const palabras = texto.split(/\s+/)
     .filter(p => p.length >= 2 && !stopWords.has(p.toLowerCase()) && isNaN(p))
-  
+
   if (palabras.length === 0) return []
 
-  // 1. Búsqueda exacta del texto completo contra marca+modelo
-  const textoLimpio = palabras.join(' ')
-  const r0 = await pool.query(
-    `SELECT * FROM stock WHERE LOWER(CONCAT(marca,' ',modelo)) LIKE LOWER($1)`,
-    [`%${textoLimpio}%`]
-  )
-  if (r0.rows.length > 0) return r0.rows
+  // 1. Traer candidatos: autos que contengan AL MENOS UNA de las palabras buscadas
+  //    en marca, modelo o versión (sin importar en qué campo esté cada palabra,
+  //    porque la IA no siempre las guarda en el mismo campo)
+  const orClauses = palabras.map((_, i) =>
+    `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
+  ).join(' OR ')
+  const params = palabras.map(p => `%${p}%`)
+  const candidatos = await pool.query(`SELECT * FROM stock WHERE ${orClauses} ORDER BY marca, modelo`, params)
+  if (candidatos.rows.length === 0) return []
 
-  // 2. Si hay 2+ palabras: buscar que TODAS las palabras aparezcan en marca+modelo
-  if (palabras.length >= 2) {
-    let whereClause = palabras.map((_, i) => 
-      `LOWER(CONCAT(marca,' ',modelo,' ',version)) LIKE LOWER($${i+1})`
-    ).join(' AND ')
-    const params = palabras.map(p => `%${p}%`)
-    const r1 = await pool.query(`SELECT * FROM stock WHERE ${whereClause} ORDER BY marca, modelo`, params)
-    if (r1.rows.length > 0) return r1.rows
-  }
-
-  // 3. Solo si hay 1 palabra: buscar por modelo exacto (no por marca sola)
-  if (palabras.length === 1) {
-    const r2 = await pool.query(
-      `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
-      [`%${palabras[0]}%`]
-    )
-    return r2.rows
-  }
-
-  // 4. Fallback: primera palabra solo en modelo (nunca en marca sola)
-  const r3 = await pool.query(
-    `SELECT * FROM stock WHERE LOWER(modelo) LIKE LOWER($1) ORDER BY marca, modelo`,
-    [`%${palabras[0]}%`]
-  )
-  return r3.rows
+  // 2. Puntuar cada auto según cuántas palabras de la búsqueda contiene
+  //    (sumando marca+modelo+version), y quedarnos con los mejor puntuados
+  const scored = candidatos.rows.map(r => {
+    const campo = `${r.marca||''} ${r.modelo||''} ${r.version||''}`.toLowerCase()
+    const score = palabras.filter(p => campo.includes(p.toLowerCase())).length
+    return { row: r, score }
+  })
+  const maxScore = Math.max(...scored.map(s => s.score))
+  // Si hay 2+ palabras relevantes, exigimos que matcheen al menos 2 (o todas, si solo hay 1)
+  const minScore = palabras.length >= 2 ? Math.min(2, maxScore) : 1
+  return scored.filter(s => s.score >= minScore).sort((a, b) => b.score - a.score).map(s => s.row)
 }
 
 // ── Migración: cargar stock hardcodeado a la DB ─────────────
@@ -577,7 +593,7 @@ app.post('/api/migrar-stock', async (req, res) => {
 app.post('/api/stock/bulk', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
-  const { texto, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
+  const { texto, ubicacion='Tutu Automotores', moneda='ARS', telefono='' } = req.body
   if (!texto) return res.status(400).json({ error: 'Texto requerido' })
   try {
     // Dividir en líneas y procesar en grupos de 30 autos
@@ -607,7 +623,7 @@ app.post('/api/stock/bulk', async (req, res) => {
     }
 
     console.log('Total autos parseados:', todosLosAutos.length)
-    const result = await guardarAutosEnDB(todosLosAutos, ubicacion)
+    const result = await guardarAutosEnDB(todosLosAutos, ubicacion, telefono)
     const matches = await buscarMatchesClientes(todosLosAutos)
     res.json({ ...result, matches })
   } catch(e) { res.status(500).json({ error: e.message }) }
@@ -618,7 +634,7 @@ app.post('/api/stock/bulk', async (req, res) => {
 app.post('/api/stock/bulk-pdf', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada' })
-  const { pdf, ubicacion='Tutu Automotores', moneda='ARS' } = req.body
+  const { pdf, ubicacion='Tutu Automotores', moneda='ARS', telefono='' } = req.body
   if (!pdf) return res.status(400).json({ error: 'PDF requerido' })
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -657,26 +673,27 @@ Formato: {"marca":"Ford","modelo":"Fiesta","version":"1.6 SE","anio":"2015","km"
     } catch(e) {
       return res.status(400).json({ error: 'JSON inválido en PDF: ' + e.message })
     }
-    const result = await guardarAutosEnDB(autos, ubicacion)
+    const result = await guardarAutosEnDB(autos, ubicacion, telefono)
     const matches = await buscarMatchesClientes(autos)
     res.json({ ...result, matches })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Helpers compartidos ──────────────────────────────────────
-async function guardarAutosEnDB(autos, ubicacion) {
+async function guardarAutosEnDB(autos, ubicacion, telefono='') {
   let guardados = 0, saltados = 0, errores = 0
   for (const a of autos) {
-    if (!a.marca || !a.modelo) { errores++; continue }
+    if (!a.modelo) { errores++; continue }
+    var marca = a.marca || '';
     try {
       const existe = await pool.query(
         'SELECT id FROM stock WHERE LOWER(marca)=LOWER($1) AND LOWER(modelo)=LOWER($2) AND anio=$3 AND LOWER(ubicacion)=LOWER($4)',
-        [a.marca, a.modelo, String(a.anio||''), ubicacion]
+        [marca, a.modelo, String(a.anio||''), ubicacion]
       )
       if (existe.rows.length > 0) { saltados++; continue }
       await pool.query(
-        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
-        [a.marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion]
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        [marca, a.modelo, a.version||'', String(a.anio||''), Number(a.km)||0, a.color||'', String(a.precio||''), a.moneda||'ARS', a.estado||'Disponible', a.notas||'', ubicacion, telefono]
       )
       guardados++
     } catch(e) { errores++; console.error('Error guardando auto:', e.message) }
