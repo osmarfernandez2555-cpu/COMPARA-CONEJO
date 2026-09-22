@@ -112,7 +112,7 @@ app.get('/api/stock', async (req, res) => {
 // ── Stock: guardar / actualizar ──────────────────────────────
 app.post('/api/stock', async (req, res) => {
   try {
-    const { marca, modelo, version='', anio='', km=0, color='', precio='', moneda='ARS', estado='Disponible', notas='', ubicacion='Tutu Automotores' } = req.body
+    const { marca, modelo, version='', anio='', km=0, color='', precio='', moneda='ARS', estado='Disponible', notas='', ubicacion='Tutu Automotores', telefono='' } = req.body
     if (!marca || !modelo) return res.status(400).json({ error: 'Marca y modelo son requeridos' })
 
     // Buscar si ya existe
@@ -123,14 +123,14 @@ app.post('/api/stock', async (req, res) => {
 
     if (existe.rows.length > 0) {
       await pool.query(
-        'UPDATE stock SET version=$1,km=$2,color=$3,precio=$4,moneda=$5,estado=$6,notas=$7,ubicacion=$8,updated_at=NOW() WHERE id=$9',
-        [version, Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion, existe.rows[0].id]
+        'UPDATE stock SET version=$1,km=$2,color=$3,precio=$4,moneda=$5,estado=$6,notas=$7,ubicacion=$8,telefono=$9,updated_at=NOW() WHERE id=$10',
+        [version, Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion, telefono, existe.rows[0].id]
       )
       res.json({ ok: true, accion: 'actualizado' })
     } else {
       await pool.query(
-        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
-        [marca, modelo, version, String(anio), Number(km)||0, color, String(precio), moneda, estado, notas]
+        'INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',
+        [marca, modelo, version, String(anio), Number(km)||0, color, String(precio), moneda, estado, notas, ubicacion, telefono]
       )
       res.json({ ok: true, accion: 'guardado' })
     }
