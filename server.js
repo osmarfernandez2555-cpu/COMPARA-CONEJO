@@ -178,7 +178,7 @@ app.post('/api/chat', async (req, res) => {
         `KM: ${Number(a.km).toLocaleString('es-AR')} | Color: ${a.color||'-'} | ` +
         `Precio: ${a.precio} ${a.moneda} | Ubicación: ${a.ubicacion||'Tutu Automotores'} | Estado: ${a.estado}${a.notas ? ' | '+a.notas : ''}`
       ).join('\n')
-      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==\n\nIMPORTANTE: Siempre indicá la Ubicación de cada auto. NUNCA uses tablas markdown. Listá cada auto en una línea con formato: Marca Modelo Versión Año — KM: X — Precio: $ X — Ubicación: X`
+      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==\n\nIMPORTANTE: Siempre indicá la Ubicación de cada auto TAL CUAL aparece en los datos de arriba, copiándola literalmente — nunca la resumas, parafrasees ni la reemplaces por una descripción genérica como "(a revisar/tasar)". Si la Ubicación incluye un nombre de persona y/o un número de teléfono (por ejemplo, autos cargados desde el bot de WhatsApp), esos datos son importantes y SIEMPRE tienen que aparecer completos, nunca se omiten. NUNCA uses tablas markdown. Listá cada auto en una línea con formato: Marca Modelo Versión Año — KM: X — Precio: $ X — Ubicación: X (copiada literal)`
     }
 
     const comandos = `
