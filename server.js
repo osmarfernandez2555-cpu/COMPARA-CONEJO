@@ -67,6 +67,8 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni_garante TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS nombre_garante TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS ubicacion TEXT DEFAULT 'Tutu Automotores'`).catch(()=>{})
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -136,6 +138,70 @@ app.post('/api/stock', async (req, res) => {
     }
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
+
+// ── Stock: importación automática (bot de grupos de WhatsApp) ──
+// Distinto de /api/stock: acá el mismo auto de DISTINTOS vendedores se guarda por
+// separado (la clave incluye la ubicación = nombre + teléfono de quien lo publica),
+// y si el mismo vendedor lo vuelve a publicar se actualiza precio/km en vez de duplicar.
+// Si definís IMPORT_KEY en las variables de Railway, el bot tiene que mandarla.
+app.post('/api/stock/import', async (req, res) => {
+  try {
+    if (process.env.IMPORT_KEY && req.headers['x-import-key'] !== process.env.IMPORT_KEY) {
+      return res.status(401).json({ error: 'No autorizado' })
+    }
+    const {
+      marca, modelo, version='', anio='', km=0, color='', precio='', moneda='ARS',
+      estado='Disponible', notas='', ubicacion='', telefono='', origen='grupo'
+    } = req.body
+    if (!marca || !modelo) return res.status(400).json({ error: 'Marca y modelo son requeridos' })
+    if (!ubicacion) return res.status(400).json({ error: 'Ubicación requerida' })
+    const kmNum = Number(km) || 0
+
+    const existe = await pool.query(
+      `SELECT id FROM stock
+       WHERE LOWER(marca)=LOWER($1) AND LOWER(modelo)=LOWER($2) AND anio=$3 AND LOWER(ubicacion)=LOWER($4)
+         AND (COALESCE(km,0)=0 OR $5::int=0 OR km=$5::int)
+         AND (COALESCE(version,'')='' OR $6='' OR LOWER(version)=LOWER($6))
+       ORDER BY id LIMIT 1`,
+      [marca, modelo, String(anio), ubicacion, kmNum, version]
+    )
+
+    if (existe.rows.length > 0) {
+      await pool.query(
+        `UPDATE stock SET
+           version = COALESCE(NULLIF($1,''), version),
+           km = CASE WHEN $2::int > 0 THEN $2::int ELSE km END,
+           color = COALESCE(NULLIF($3,''), color),
+           precio = COALESCE(NULLIF($4,''), precio),
+           moneda = $5, estado = $6, notas = $7, telefono = COALESCE(NULLIF($8,''), telefono),
+           updated_at = NOW()
+         WHERE id = $9`,
+        [version, kmNum, color, String(precio), moneda, estado, notas, telefono, existe.rows[0].id]
+      )
+      return res.json({ ok: true, accion: 'actualizado', id: existe.rows[0].id })
+    }
+    const ins = await pool.query(
+      `INSERT INTO stock (marca,modelo,version,anio,km,color,precio,moneda,estado,notas,ubicacion,telefono,origen)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      [marca, modelo, version, String(anio), kmNum, color, String(precio), moneda, estado, notas, ubicacion, telefono, origen]
+    )
+    res.json({ ok: true, accion: 'guardado', id: ins.rows[0].id })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// Limpieza: los avisos cargados desde grupos que nadie volvió a publicar en N días
+// se borran solos (se asume que ya se vendieron). Cambiable con STOCK_GRUPO_DIAS; 0 = no borrar nunca.
+setInterval(async () => {
+  try {
+    const dias = Number(process.env.STOCK_GRUPO_DIAS ?? 21)
+    if (!dias || dias < 1) return
+    const r = await pool.query(
+      `DELETE FROM stock WHERE origen='grupo' AND COALESCE(updated_at, created_at) < NOW() - ($1 || ' days')::interval`,
+      [String(dias)]
+    )
+    if (r.rowCount > 0) console.log(`[STOCK] Limpieza: ${r.rowCount} avisos de grupos con más de ${dias} días sin repostear`)
+  } catch(e) { console.error('[STOCK] Error en limpieza:', e.message) }
+}, 6 * 60 * 60 * 1000)
 
 
 // ── Stock: eliminar por ID ───────────────────────────────────
