@@ -807,11 +807,17 @@ app.get('/api/clientes', async (req, res) => {
 // ── Clientes busqueda: guardar ───────────────────────────────
 app.post('/api/clientes', async (req, res) => {
   try {
-    const { nombre, telefono='', marca='', modelo, anio='', presupuesto='', notas='', asesor='' } = req.body
+    const {
+      nombre, telefono='', marca='', modelo, anio='', presupuesto='', notas='', asesor='',
+      dni='', tiene_permuta='no', auto_permuta='', tiene_garantes='no', nombre_garante='', dni_garante=''
+    } = req.body
     if (!nombre || !modelo) return res.status(400).json({ error: 'Nombre y modelo requeridos' })
     await pool.query(
-      'INSERT INTO clientes_busqueda (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor]
+      `INSERT INTO clientes_busqueda
+       (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor,dni,tiene_permuta,auto_permuta,tiene_garantes,nombre_garante,dni_garante)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor,
+       dni, tiene_permuta, auto_permuta, tiene_garantes, nombre_garante, dni_garante]
     )
     // Buscar si hay match en stock
     const stockMatch = await pool.query(
