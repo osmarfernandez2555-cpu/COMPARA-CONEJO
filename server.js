@@ -839,7 +839,8 @@ app.delete('/api/clientes/:id', async (req, res) => {
 // ── Clientes busqueda: marcar encontrado ─────────────────────
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
-    const campos = ['estado','vendedor','calificacion','observaciones','estado_lead','motivo_perdida','bancos','monto_galicia','monto_bancor','monto_nacion','monto_santander','monto_mg']
+    const campos = ['estado','vendedor','calificacion','observaciones','estado_lead','motivo_perdida','bancos','monto_galicia','monto_bancor','monto_nacion','monto_santander','monto_mg',
+      'nombre','telefono','dni','modelo','anio','presupuesto','tiene_permuta','auto_permuta','tiene_garantes','nombre_garante','dni_garante']
     const sets = []
     const params = []
     campos.forEach(campo => {
