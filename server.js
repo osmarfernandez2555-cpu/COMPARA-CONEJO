@@ -228,11 +228,137 @@ app.delete('/api/stock', async (req, res) => {
 })
 
 // ── Chat proxy: inyecta stock de DB + procesa comandos ───────
+// "hace 3 días · 7/9/2026" a partir de la fecha de carga (misma lógica que el Match del frontend)
+function textoFechaCarga(fecha) {
+  if (!fecha) return ''
+  const d = new Date(fecha)
+  if (isNaN(d.getTime())) return ''
+  const diffMs = Date.now() - d.getTime()
+  const dias = Math.floor(diffMs / 86400000)
+  let rel
+  if (dias <= 0) { const h = Math.floor(diffMs / 3600000); rel = h <= 0 ? 'recién cargado' : 'hace ' + h + (h === 1 ? ' hora' : ' horas') }
+  else if (dias === 1) rel = 'hace 1 día'
+  else if (dias < 30) rel = 'hace ' + dias + ' días'
+  else if (dias < 365) { const m = Math.floor(dias / 30); rel = 'hace ' + m + (m === 1 ? ' mes' : ' meses') }
+  else { const a = Math.floor(dias / 365); rel = 'hace ' + a + (a === 1 ? ' año' : ' años') }
+  return rel + ' · ' + d.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Cordoba' })
+}
+
+// ── Borrado de una lista por agencia + fecha de carga (con confirmación obligatoria) ──
+// Paso 1: la IA pide [PREPARAR_BORRADO:{ubicacion,fecha}] → el servidor NO borra: cuenta, muestra
+//         la lista y deja una marca invisible en el mensaje con lo que se va a borrar.
+// Paso 2: si el siguiente mensaje del usuario es una confirmación, el servidor (sin pasar por la IA)
+//         vuelve a contar, verifica que sea la misma cantidad y recién ahí borra.
+const MARCA_BORRADO = /<!--BORRADO:([A-Za-z0-9+\/=]+)-->/
+const CONFIRMA_BORRADO = /^\s*(?:s[ií][\s,]+)?(?:confirmo|confirmar|dale|ok|okey|borr[aá]los?|borrarlos?|elimin[aá]los?|eliminarlos?|borrar|eliminar)\s*[.!¡]*\s*$|^\s*s[ií]\s*[.!¡]*\s*$/i
+
+function fechaISOArg(fecha) { // 'YYYY-MM-DD' según la hora de Argentina (la misma que ve el usuario)
+  const d = new Date(fecha)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Cordoba' })
+}
+function normalizarFechaPedida(txt) { // acepta 2026-08-27, 27/8/2026, 27-8-26 → 'YYYY-MM-DD' ('' si no se entiende)
+  const t = String(txt || '').trim()
+  let y, m, d
+  let mm = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (mm) { y = +mm[1]; m = +mm[2]; d = +mm[3] }
+  else if ((mm = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/))) { d = +mm[1]; m = +mm[2]; y = +mm[3]; if (y < 100) y += 2000 }
+  else return ''
+  const f = new Date(Date.UTC(y, m - 1, d))
+  if (f.getUTCFullYear() !== y || f.getUTCMonth() !== m - 1 || f.getUTCDate() !== d) return '' // 31/2, etc.
+  return String(y).padStart(4, '0') + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0')
+}
+function fechaLegible(iso) { const [y, m, d] = iso.split('-').map(Number); return d + '/' + m + '/' + y }
+function textoDeMensaje(m) {
+  if (!m) return ''
+  if (typeof m.content === 'string') return m.content
+  if (Array.isArray(m.content)) return m.content.map(b => (b && b.type === 'text' ? b.text : '')).join('\n')
+  return ''
+}
+async function buscarListaParaBorrar(ubicacion, fechaISO) {
+  const patron = '%' + String(ubicacion).trim().replace(/[\\%_]/g, '\\$&') + '%'
+  const r = await pool.query(
+    `SELECT id, marca, modelo, version, anio, ubicacion, created_at FROM stock
+     WHERE LOWER(COALESCE(ubicacion,'')) LIKE LOWER($1) ESCAPE '\\' ORDER BY ubicacion, marca, modelo, anio`, [patron])
+  if (!fechaISO) return { filas: r.rows, todasDeLaAgencia: r.rows }
+  return { filas: r.rows.filter(a => a.created_at && fechaISOArg(a.created_at) === fechaISO), todasDeLaAgencia: r.rows }
+}
+function armarVistaPreviaBorrado(ubicacion, fechaISO, filas, todasDeLaAgencia) {
+  const cuando = fechaISO ? 'cargados el ' + fechaLegible(fechaISO) : 'de cualquier fecha de carga'
+  if (!filas.length) {
+    if (!todasDeLaAgencia.length) return 'No encontré ningún auto cuya ubicación contenga «' + ubicacion + '». No borré nada.'
+    const porFecha = {}
+    todasDeLaAgencia.forEach(a => { const f = a.created_at ? fechaLegible(fechaISOArg(a.created_at)) : 'sin fecha'; porFecha[f] = (porFecha[f] || 0) + 1 })
+    return 'Hay autos de «' + ubicacion + '», pero ninguno cargado el ' + fechaLegible(fechaISO) + '. No borré nada.\n\nFechas de carga que tiene esa agencia:\n' +
+      Object.entries(porFecha).map(([f, n]) => '• ' + f + ' — ' + n + (n === 1 ? ' auto' : ' autos')).join('\n')
+  }
+  const porUbic = {}
+  filas.forEach(a => { const u = a.ubicacion || 'Tutu Automotores'; porUbic[u] = (porUbic[u] || 0) + 1 })
+  const lineas = filas.slice(0, 40).map((a, i) => (i + 1) + '. ' + [a.marca, a.modelo, a.version].filter(Boolean).join(' ') + (a.anio ? ' | ' + a.anio : ''))
+  let txt = '🗑️ **Esto es lo que se borraría** (' + filas.length + (filas.length === 1 ? ' auto' : ' autos') + ' ' + cuando + '):\n\n'
+  txt += Object.entries(porUbic).map(([u, n]) => '📍 ' + u + ' — ' + n + (n === 1 ? ' auto' : ' autos')).join('\n') + '\n\n'
+  txt += lineas.join('\n')
+  if (filas.length > 40) txt += '\n... y ' + (filas.length - 40) + ' más'
+  txt += '\n\n⚠️ Todavía **no borré nada**. Respondé **CONFIRMO** para borrarlos definitivamente (no se puede deshacer), o escribí cualquier otra cosa para cancelar.'
+  const marca = Buffer.from(JSON.stringify({ u: ubicacion, f: fechaISO || '', n: filas.length }), 'utf8').toString('base64')
+  return txt + '<!--BORRADO:' + marca + '-->'
+}
+async function procesarPreparacionBorrado(jsonTexto) {
+  let cmd
+  try { cmd = JSON.parse(jsonTexto) } catch (e) { return 'No pude entender el pedido de borrado. No borré nada.' }
+  const ubicacion = String(cmd.ubicacion || '').trim()
+  if (ubicacion.length < 3) return 'Necesito el nombre de la agencia (al menos 3 letras) para armar la lista. No borré nada.'
+  let fechaISO = ''
+  if (cmd.fecha) {
+    fechaISO = normalizarFechaPedida(cmd.fecha)
+    if (!fechaISO) return 'No entendí la fecha «' + cmd.fecha + '». Decime el día así: 27/8/2026. No borré nada.'
+  }
+  const { filas, todasDeLaAgencia } = await buscarListaParaBorrar(ubicacion, fechaISO)
+  return armarVistaPreviaBorrado(ubicacion, fechaISO, filas, todasDeLaAgencia)
+}
+// Devuelve el texto de respuesta si el último mensaje confirma un borrado preparado; null si no aplica.
+async function ejecutarBorradoConfirmado(messages) {
+  if (!Array.isArray(messages) || messages.length < 2) return null
+  const ultimo = messages[messages.length - 1], previo = messages[messages.length - 2]
+  if (!ultimo || ultimo.role !== 'user' || !previo || previo.role !== 'assistant') return null
+  const textoUsuario = textoDeMensaje(ultimo)
+  if (textoUsuario.length > 40 || !CONFIRMA_BORRADO.test(textoUsuario)) return null
+  const mm = textoDeMensaje(previo).match(MARCA_BORRADO)
+  if (!mm) return null
+  let pedido
+  try { pedido = JSON.parse(Buffer.from(mm[1], 'base64').toString('utf8')) } catch (e) { return null }
+  const ubicacion = String(pedido.u || '').trim()
+  const fechaISO = pedido.f ? normalizarFechaPedida(pedido.f) : ''
+  const esperado = Number(pedido.n)
+  if (ubicacion.length < 3 || (pedido.f && !fechaISO) || !Number.isInteger(esperado) || esperado < 1) return null
+  const { filas } = await buscarListaParaBorrar(ubicacion, fechaISO)
+  if (filas.length === 0) return 'Esa lista ya no tiene autos (puede que ya se haya borrado). No borré nada más.'
+  if (filas.length !== esperado) return '⚠️ La lista cambió desde que te la mostré (eran ' + esperado + ' y ahora son ' + filas.length + '). Por seguridad **no borré nada**. Pedime la lista de nuevo para revisarla.'
+  const r = await pool.query('DELETE FROM stock WHERE id = ANY($1::int[])', [filas.map(a => a.id)])
+  console.log('🗑️ Lista borrada: ' + r.rowCount + ' autos de «' + ubicacion + '»' + (fechaISO ? ' del ' + fechaISO : ''))
+  return '✅ Listo: borré **' + r.rowCount + (r.rowCount === 1 ? ' auto' : ' autos') + '** de «' + ubicacion + '»' + (fechaISO ? ' cargados el ' + fechaLegible(fechaISO) : '') + '.'
+}
+function limpiarMarcasBorrado(messages) { // la IA no necesita ver la marca interna
+  if (!Array.isArray(messages)) return messages
+  const quitar = t => String(t).replace(/<!--BORRADO:[A-Za-z0-9+\/=]+-->/g, '')
+  return messages.map(m => {
+    if (typeof m.content === 'string') return { ...m, content: quitar(m.content) }
+    if (Array.isArray(m.content)) return { ...m, content: m.content.map(b => (b && b.type === 'text' ? { ...b, text: quitar(b.text) } : b)) }
+    return m
+  })
+}
+
 app.post('/api/chat', async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key no configurada en el servidor' })
 
   try {
+    // ¿El usuario está confirmando un borrado que se le mostró en el mensaje anterior? Se resuelve acá, sin IA.
+    const respuestaBorrado = await ejecutarBorradoConfirmado(req.body.messages)
+    if (respuestaBorrado) {
+      return res.json({ id: 'local-borrado', type: 'message', role: 'assistant', model: 'local', stop_reason: 'end_turn', content: [{ type: 'text', text: respuestaBorrado }] })
+    }
+
     // Leer stock dinámico de la DB
     const stockRows = await pool.query('SELECT * FROM stock ORDER BY marca, modelo, anio')
     const stock = stockRows.rows
@@ -242,11 +368,12 @@ app.post('/api/chat', async (req, res) => {
       const lineas = stock.map(a =>
         `• ${a.marca} ${a.modelo}${a.version ? ' '+a.version : ''} ${a.anio} | ` +
         `KM: ${Number(a.km).toLocaleString('es-AR')} | Color: ${a.color||'-'} | ` +
-        `Precio: ${a.precio} ${a.moneda} | Ubicación: ${a.ubicacion||'Tutu Automotores'} | Estado: ${a.estado}${a.notas ? ' | '+a.notas : ''}`
+        `Precio: ${a.precio} ${a.moneda} | Ubicación: ${a.ubicacion||'Tutu Automotores'} | Estado: ${a.estado}${a.created_at ? ' | Cargado: '+textoFechaCarga(a.created_at) : ''}${a.notas ? ' | '+a.notas : ''}`
       ).join('\n')
-      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==\n\nIMPORTANTE: Siempre indicá la Ubicación de cada auto TAL CUAL aparece en los datos de arriba, copiándola literalmente — nunca la resumas, parafrasees ni la reemplaces por una descripción genérica como "(a revisar/tasar)". Si la Ubicación incluye un nombre de persona y/o un número de teléfono (por ejemplo, autos cargados desde el bot de WhatsApp), esos datos son importantes y SIEMPRE tienen que aparecer completos, nunca se omiten. NUNCA uses tablas markdown. Listá cada auto en una línea con formato: Marca Modelo Versión Año — KM: X — Precio: $ X — Ubicación: X (copiada literal)`
+      stockExtra = `\n\n== STOCK CARGADO POR EMPLEADOS (${stock.length} vehículos — PRIORIDAD ALTA) ==\n${lineas}\n== FIN STOCK EMPLEADOS ==\n\nIMPORTANTE: Siempre indicá la Ubicación de cada auto TAL CUAL aparece en los datos de arriba, copiándola literalmente — nunca la resumas, parafrasees ni la reemplaces por una descripción genérica como "(a revisar/tasar)". Si la Ubicación incluye un nombre de persona y/o un número de teléfono (por ejemplo, autos cargados desde el bot de WhatsApp), esos datos son importantes y SIEMPRE tienen que aparecer completos, nunca se omiten. NUNCA uses tablas markdown. Listá cada auto en una línea con formato: Marca Modelo Versión Año — KM: X — Precio: $ X — Ubicación: X (copiada literal) — Cargado: X (copiado literal, ej \"hace 3 días · 7/9/2026\"). La fecha de carga SÍ la tenés en los datos: nunca digas que no registrás fechas de carga`
     }
 
+    const hoyArg = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Cordoba' })
     const comandos = `
 
 == FORMATO DE RESPUESTAS ==
@@ -256,13 +383,15 @@ NUNCA uses tablas markdown (| col | col |). Cuando listes autos usá SIEMPRE est
 - KM: 141.771 | Color: Gris
 - Precio: $14.500.000 ARS
 - 📍 Ubicación: Mediterráneo
+- 🕐 Cargado: hace 3 días · 7/9/2026
 
 2. Toyota Hilux SRX 4x4 AT 2.8 | 2022
 - KM: 76.500 | Color: Blanco
 - Precio: $60.000.000 ARS
 - 📍 Ubicación: Tutu Automotores
+- 🕐 Cargado: hace 12 días · 25/9/2026
 
-Siempre incluí la Ubicación en cada auto. Si no hay ubicación conocida, poné "Tutu Automotores".
+Siempre incluí la Ubicación y la fecha de Cargado en cada auto (copiá la fecha tal cual figura en los datos del stock). Si no hay ubicación conocida, poné "Tutu Automotores". Si un auto no trae fecha de carga en los datos, omití esa línea.
 
 == GESTIÓN DE STOCK ==
 Cuando el usuario diga "guardá", "agregá", "cargá" o "actualizá" un auto:
@@ -288,7 +417,15 @@ Cuando el usuario diga "eliminá", "borrá" o "sacá" un auto:
 Cuando diga "mostrá el stock", "qué autos tenemos", "listá vehículos cargados":
 • Mostrá el stock de la sección STOCK CARGADO POR EMPLEADOS de forma ordenada y clara.
 
-IMPORTANTE: Los bloques [GUARDAR_STOCK:...] y [ELIMINAR_STOCK:...] van siempre al final, en una línea, sin saltos de línea adentro del JSON.`
+== BORRAR LA LISTA DE UNA AGENCIA POR FECHA DE CARGA ==
+Cuando el usuario pida eliminar o borrar la lista, los autos o lo cargado de una AGENCIA (ubicación) en una FECHA de carga (ej: "necesito eliminar la lista de adrian yacir del 27/8/2026"):
+• NO uses [ELIMINAR_STOCK] para esto: borraría autos de otras agencias.
+• Respondé con UNA frase corta (por ejemplo "Reviso qué autos tiene cargados esa agencia en esa fecha.") y al FINAL agregá, en una línea: [PREPARAR_BORRADO:{"ubicacion":"adrian yacir","fecha":"2026-08-27"}]
+• "ubicacion" es el nombre de la agencia como lo escribió el usuario, sin teléfono. "fecha" va SIEMPRE en formato AAAA-MM-DD. Si el usuario no dijo el año, usá el año de la fecha de hoy. Fecha de hoy: ${hoyArg}.
+• Si el usuario no dijo qué fecha, preguntale de qué fecha de carga antes de usar el comando. Solo omití "fecha" si pide expresamente borrar TODO lo de esa agencia.
+• Este comando NO borra nada: el sistema le muestra la lista y le pide confirmación al usuario. Nunca digas que ya borraste algo y nunca pidas la confirmación vos: la pide el sistema.
+
+IMPORTANTE: Los bloques [GUARDAR_STOCK:...], [ELIMINAR_STOCK:...] y [PREPARAR_BORRADO:...] van siempre al final, en una línea, sin saltos de línea adentro del JSON.`
 
     // Inyectar stock y comandos en el system prompt
     // Detectar si la pregunta es sobre precio de un auto (InfoAuto)
@@ -338,6 +475,7 @@ ${lineas}`
 
     const body = {
       ...req.body,
+      messages: limpiarMarcasBorrado(req.body.messages),
       system: req.body.system + stockExtra + comandos + infoautoExtra
     }
 
@@ -363,7 +501,8 @@ ${lineas}`
       let reply = data.content[0].text
 
       const guardar = reply.match(/\[GUARDAR_STOCK:(\{[^\]]+\})\]/)
-      const eliminar = reply.match(/\[ELIMINAR_STOCK:(\{[^\]]+\})\]/)
+      const preparar = reply.match(/\[PREPARAR_BORRADO:(\{[^\]]+\})\]/)
+      const eliminar = preparar ? null : reply.match(/\[ELIMINAR_STOCK:(\{[^\]]+\})\]/) // si pidió preparar un borrado por lista, jamás se ejecuta además el borrado por modelo
       const guardarCliente = reply.match(/\[GUARDAR_CLIENTE:(\{[^\]]+\})\]/)
 
       if (guardar) {
@@ -419,6 +558,14 @@ ${lineas}`
           }
         } catch(e) { console.error('Error guardando cliente:', e.message) }
         data.content[0].text = data.content[0].text.replace(/\[GUARDAR_CLIENTE:[^\]]+\]/g, '').trim()
+      }
+
+      if (preparar) {
+        let vistaPrevia
+        try { vistaPrevia = await procesarPreparacionBorrado(preparar[1]) }
+        catch (e) { console.error('Error preparando borrado:', e.message); vistaPrevia = 'No pude armar la lista para borrar. No borré nada.' }
+        const base = data.content[0].text.replace(/\[PREPARAR_BORRADO:[^\]]+\]/g, '').replace(/\[ELIMINAR_STOCK:[^\]]+\]/g, '').trim()
+        data.content[0].text = (base ? base + '\n\n' : '') + vistaPrevia
       }
     }
 
