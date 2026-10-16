@@ -959,10 +959,10 @@ app.post('/api/clientes', async (req, res) => {
       dni='', tiene_permuta='no', auto_permuta='', tiene_garantes='no', nombre_garante='', dni_garante=''
     } = req.body
     if (!nombre || !modelo) return res.status(400).json({ error: 'Nombre y modelo requeridos' })
-    await pool.query(
+    const ins = await pool.query(
       `INSERT INTO clientes_busqueda
        (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor,dni,tiene_permuta,auto_permuta,tiene_garantes,nombre_garante,dni_garante)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
       [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor,
        dni, tiene_permuta, auto_permuta, tiene_garantes, nombre_garante, dni_garante]
     )
@@ -971,7 +971,7 @@ app.post('/api/clientes', async (req, res) => {
       `SELECT * FROM stock WHERE (LOWER(modelo) LIKE LOWER($1) OR LOWER(marca) LIKE LOWER($1)) ${anio ? 'AND anio=$2' : ''}`,
       anio ? [`%${modelo}%`, String(anio)] : [`%${modelo}%`]
     )
-    res.json({ ok: true, matches: stockMatch.rows })
+    res.json({ ok: true, id: ins.rows[0] && ins.rows[0].id, matches: stockMatch.rows })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -987,7 +987,7 @@ app.delete('/api/clientes/:id', async (req, res) => {
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
     const campos = ['estado','vendedor','calificacion','observaciones','estado_lead','motivo_perdida','bancos','monto_galicia','monto_bancor','monto_nacion','monto_santander','monto_mg',
-      'nombre','telefono','dni','modelo','anio','presupuesto','tiene_permuta','auto_permuta','tiene_garantes','nombre_garante','dni_garante']
+      'nombre','telefono','dni','modelo','anio','presupuesto','tiene_permuta','auto_permuta','tiene_garantes','nombre_garante','dni_garante','notas']
     const sets = []
     const params = []
     campos.forEach(campo => {
@@ -999,8 +999,8 @@ app.patch('/api/clientes/:id', async (req, res) => {
     if (sets.length === 0) return res.status(400).json({ error: 'Nada que actualizar' })
     sets.push('updated_at=NOW()')
     params.push(req.params.id)
-    await pool.query('UPDATE clientes_busqueda SET ' + sets.join(',') + ' WHERE id=$' + params.length, params)
-    res.json({ ok: true })
+    const upd = await pool.query('UPDATE clientes_busqueda SET ' + sets.join(',') + ' WHERE id=$' + params.length, params)
+    res.json({ ok: true, updated: upd.rowCount })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
