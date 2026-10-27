@@ -1219,6 +1219,9 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
 });
 // ── FIN VENDEDORES ────────────────────────────────────────────────────────────
 
+// ── KOMMO: webhook para pedir autos y calificar clientes por banco ───────────
+require('./kommo-webhook')(app, pool, buscarEnStock)
+
 app.use(express.static(path.join(__dirname, 'public')))
 
 const PORT = process.env.PORT || 3000
