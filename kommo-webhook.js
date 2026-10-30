@@ -118,7 +118,16 @@ async function kommo(path, opts = {}) {
   const txt = await r.text()
   let data = null
   try { data = txt ? JSON.parse(txt) : null } catch (e) { data = txt }
-  if (!r.ok) throw new Error(`Kommo ${r.status} en ${path}: ${typeof data === 'string' ? data.slice(0, 200) : JSON.stringify(data).slice(0, 300)}`)
+  if (!r.ok) {
+    const txt = typeof data === 'string' ? data : JSON.stringify(data || {})
+    const lead = (path.match(/\/leads\/(\d+)/) || [])[1]
+    // 226 = el elemento no existe; 404 en un lead = idem
+    if (lead && (/"code":\s*226/.test(txt) || r.status === 404)) {
+      throw new Error(`El lead #${lead} no existe en Kommo (¿era un número de prueba?). El resultado quedó guardado en Ruthina.`)
+    }
+    if (r.status === 401) throw new Error('Kommo rechazó el token (401): revisá KOMMO_TOKEN en Railway')
+    throw new Error(`Kommo ${r.status} en ${path}: ${txt.slice(0, 300)}`)
+  }
   return data
 }
 
