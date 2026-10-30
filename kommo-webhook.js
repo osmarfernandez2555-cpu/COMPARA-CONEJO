@@ -24,6 +24,8 @@
 //    KOMMO_STATUS_CALIFICA    id de la etapa a la que mover el lead si califica      (opcional)
 //    KOMMO_STATUS_NO_CALIFICA id de la etapa si ningún banco aprueba                (opcional)
 //    KOMMO_PIPELINE_ID        id del embudo de esas etapas                           (opcional)
+//    KOMMO_STATUS_DISPARADOR  id de la etapa que dispara la consulta (ej. "Calificar"); se pueden poner varias separadas por coma
+//                             (recomendado; sin esto, cualquier lead nuevo o cambio de etapa con CUIL y auto la dispara)
 //
 //    CONSULTA_BANCOS_CLAVE    el código de acceso de Consulta Créditos (APP_CLAVE)   [para la consulta automática]
 //    CONSULTA_BANCOS_URL      def: https://consulta-bancor-production.up.railway.app
@@ -416,7 +418,17 @@ function registrarKommo(app, pool, buscarEnStock) {
       if (b.leads && typeof b.leads === 'object') {
         res.json({ ok: true, recibido: true })   // Kommo exige respuesta rápida; procesamos después
         const ids = []
-        ;['add', 'status'].forEach(ev => (b.leads[ev] || []).forEach(l => l && l.id && ids.push(String(l.id))))
+        // Si está KOMMO_STATUS_DISPARADOR, solo cuentan los leads que entran a esa etapa
+        // (así no se dispara cuando Ruthina mueve el lead a "Califica" / "No califica")
+        const disparador = String(process.env.KOMMO_STATUS_DISPARADOR || '').split(',').map(s => s.trim()).filter(Boolean)
+        const propias = [process.env.KOMMO_STATUS_CALIFICA, process.env.KOMMO_STATUS_NO_CALIFICA].filter(Boolean).map(String)
+        ;['add', 'status'].forEach(ev => (b.leads[ev] || []).forEach(l => {
+          if (!l || !l.id) return
+          const st = String(l.status_id || '')
+          if (propias.includes(st)) return
+          if (disparador.length && !disparador.includes(st)) return
+          ids.push(String(l.id))
+        }))
         for (const id of [...new Set(ids)]) {
           try {
             if (!kommoListo()) { console.error('[kommo] llegó el lead', id, 'pero faltan KOMMO_DOMINIO / KOMMO_TOKEN'); continue }
