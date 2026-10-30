@@ -639,8 +639,9 @@ function registrarKommo(app, pool, buscarEnStock) {
         await actualizarLead(sol.lead_id, califica, califica ? 'Califica: ' + aprobados.map(x => x.label).join(', ') : 'No califica')
         kommoOk = true
       } catch (e) { kommoError = e.message; console.error('[kommo] resultado:', e.message) }
-    } else if (!sol.lead_id) kommoError = 'El pedido no tiene lead_id de Kommo'
-    else kommoError = 'Faltan KOMMO_DOMINIO / KOMMO_TOKEN en Railway'
+    }
+    // Sin KOMMO_TOKEN, Ruthina no escribe en Kommo: el bot se entera por /api/bot/calificar (o callback_url).
+    // No es un error, así que no se marca nada.
 
     const up = await pool.query(
       `UPDATE calificaciones_kommo SET estado='resuelto', resultados=$1, resultado=$2, observaciones=$3, resuelto_por=$4,
