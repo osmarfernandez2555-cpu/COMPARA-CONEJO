@@ -290,6 +290,8 @@ function registrarKommo(app, pool, buscarEnStock) {
     await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS kommo_lead_id TEXT DEFAULT ''`).catch(() => {})
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS auto_resultados JSONB DEFAULT '{}'::jsonb`).catch(() => {})
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS auto_msg TEXT DEFAULT ''`).catch(() => {})
+    await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS callback_url TEXT DEFAULT ''`).catch(() => {})
+    await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT ''`).catch(() => {})
     console.log('✅ Webhook Kommo listo: POST /api/kommo/webhook?key=***  (Kommo API ' + (kommoListo() ? 'configurada' : 'SIN configurar') + ')')
     console.log('🏦 Consulta automática de bancos: ' + (autoActiva() ? 'PRENDIDA → ' + bancosUrl() : 'apagada (falta CONSULTA_BANCOS_CLAVE)'))
   })().catch(e => console.error('Error init Kommo:', e.message))
@@ -346,16 +348,16 @@ function registrarKommo(app, pool, buscarEnStock) {
       err.status = 400; throw err
     }
     const { modelo, anio } = separarAnio(p.auto, p.anio)
-    if (!modelo) { const err = new Error('Falta el auto que busca el cliente'); err.status = 400; throw err }
+    if (!modelo && !p.sinAuto) { const err = new Error('Falta el auto que busca el cliente'); err.status = 400; throw err }
 
     const pedido = {
-      cuil, auto: modelo, anio,
+      cuil, auto: modelo || '(a definir)', anio,
       nombre: p.nombre || '', telefono: soloDigitos(p.telefono), lead_id: soloDigitos(p.lead_id),
       vendedor: p.vendedor || ''
     }
     const cuilValido = cuil.length === 11 && validarCuil(cuil)
 
-    const autos = await buscarAutos(modelo, anio)
+    const autos = modelo ? await buscarAutos(modelo, anio) : []
     const clienteId = await guardarCliente(pedido)
 
     // evitar duplicados: si ya hay un pedido abierto para este CUIL, se reutiliza
@@ -371,30 +373,37 @@ function registrarKommo(app, pool, buscarEnStock) {
            telefono=CASE WHEN $6<>'' THEN $6 ELSE telefono END,
            cliente_id=$7, updated_at=NOW()
          WHERE id=$8 RETURNING *`,
-        [modelo, anio, autos.length, pedido.lead_id, pedido.nombre, pedido.telefono, clienteId, sol.rows[0].id])
+        [modelo || sol.rows[0].auto, anio, autos.length, pedido.lead_id, pedido.nombre, pedido.telefono, clienteId, sol.rows[0].id])
     } else {
       sol = await pool.query(
         `INSERT INTO calificaciones_kommo (cliente_id,lead_id,cuil,cuil_valido,nombre,telefono,auto,anio,vendedor,autos_encontrados)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-        [clienteId, pedido.lead_id, cuil, cuilValido, pedido.nombre, pedido.telefono, modelo, anio, pedido.vendedor, autos.length])
+        [clienteId, pedido.lead_id, cuil, cuilValido, pedido.nombre, pedido.telefono, modelo || '', anio, pedido.vendedor, autos.length])
+    }
+    if (p.callback_url) {
+      sol = await pool.query(`UPDATE calificaciones_kommo SET callback_url=$1, origen='bot' WHERE id=$2 RETURNING *`, [p.callback_url, sol.rows[0].id])
+    } else if (p.origen) {
+      sol = await pool.query(`UPDATE calificaciones_kommo SET origen=$1 WHERE id=$2 RETURNING *`, [p.origen, sol.rows[0].id])
     }
     const solicitud = sol.rows[0]
     if (autoActiva() && cuil.length === 11) setTimeout(() => registrarKommo.cicloAuto && registrarKommo.cicloAuto(), 500)
 
-    const texto = textoAutos(pedido, autos) +
-      `\n\n🏦 Calificación bancaria (CUIL ${formatearCuil(cuil)}): PENDIENTE — ` +
+    const texto = (modelo ? textoAutos(pedido, autos) + '\n\n' : '') +
+      `🏦 Calificación bancaria (CUIL ${formatearCuil(cuil)}): PENDIENTE — ` +
       (autoActiva() ? 'Ruthina la consulta automáticamente en los bancos con sesión abierta y deja el resultado acá.' : 'un vendedor la está consultando en Bancor / Nación / Galicia / decreditos.') +
       (cuilValido ? '' : `\n⚠️ El CUIL no pasa la validación (dígito verificador). Revisalo con el cliente.`)
 
     return {
       ok: true,
       solicitud_id: solicitud.id,
+      solicitud,
       reutilizado,
       cliente_id: clienteId,
       cuil, cuil_formateado: formatearCuil(cuil), cuil_valido: cuilValido,
       busqueda: { auto: modelo, anio },
       calificacion: 'pendiente',
       autos_encontrados: autos.length,
+      _autos: autos,
       autos: autos.slice(0, 10).map(a => ({
         id: a.id, marca: a.marca, modelo: a.modelo, version: a.version, anio: a.anio, km: a.km,
         color: a.color, precio: a.precio, moneda: a.moneda, ubicacion: a.ubicacion || 'Tutu Automotores',
@@ -484,7 +493,8 @@ function registrarKommo(app, pool, buscarEnStock) {
         lead_id: primero(b, ['lead_id', 'leadId', 'lead']),
         vendedor: primero(b, ['vendedor', 'responsable'])
       })
-      res.json(r)
+      const { _autos, solicitud, ...publico } = r
+      res.json(publico)
       if (r.busqueda && soloDigitos(b.lead_id || b.leadId || b.lead)) {
         notaEnLead(soloDigitos(b.lead_id || b.leadId || b.lead), r.texto).catch(e => console.error('[kommo] nota:', e.message))
       }
@@ -628,6 +638,7 @@ function registrarKommo(app, pool, buscarEnStock) {
          kommo_error=$5, resuelto_at=NOW(), updated_at=NOW() WHERE id=$6 RETURNING *`,
       [JSON.stringify(resultados), resultado, obs, automatico ? 'Ruthina (automático)' : quien, kommoError, sol.id])
 
+    if (up.rows[0] && up.rows[0].callback_url) avisarCallback(up.rows[0])
     return { ok: true, resultado, kommo_enviado: kommoOk, kommo_error: kommoError, texto, pedido: up.rows[0] }
   }
 
@@ -811,4 +822,197 @@ function registrarKommo(app, pool, buscarEnStock) {
       res.json({ ok: true })
     } catch (e) { res.status(500).json({ error: e.message }) }
   })
+
+  // ═════════════════════════════════════════════════════════════════════════
+  //  API PARA EL BOT DE KOMMO (habla con el cliente)
+  //    POST /api/bot/autos              → qué autos hay en stock
+  //    POST /api/bot/calificar          → califica el CUIL en los bancos
+  //    GET  /api/bot/calificar/:id      → estado/resultado de una calificación
+  //  Clave: header  x-api-key: <RUTHINA_BOT_KEY>   (o ?key=<RUTHINA_BOT_KEY>)
+  // ═════════════════════════════════════════════════════════════════════════
+  function botClave() { return String(process.env.RUTHINA_BOT_KEY || process.env.KOMMO_WEBHOOK_KEY || '').trim() }
+  function botAuth(req, res, next) {
+    const k = botClave()
+    const dada = String(req.get('x-api-key') || req.query.key || (req.get('authorization') || '').replace(/^Bearer\s+/i, '')).trim()
+    if (!k) return res.status(503).json({ ok: false, codigo: 'sin_configurar', error: 'Falta RUTHINA_BOT_KEY en Railway' })
+    if (dada !== k) return res.status(401).json({ ok: false, codigo: 'clave_incorrecta', error: 'API key incorrecta' })
+    next()
+  }
+  const esPropio = a => !a.ubicacion || /tutu/i.test(a.ubicacion)
+
+  function autoParaBot(a) {
+    const nombre = [a.marca, a.modelo, a.version].filter(Boolean).join(' ')
+    const km = a.km ? Number(a.km).toLocaleString('es-AR') + ' km' : ''
+    return {
+      id: a.id, marca: a.marca || '', modelo: a.modelo || '', version: a.version || '', anio: a.anio || '',
+      km: a.km || 0, color: a.color || '', precio: a.precio || '', moneda: a.moneda || 'ARS',
+      precio_texto: a.precio ? fmtPrecio(a) : 'Consultar',
+      ubicacion: a.ubicacion || 'Tutu Automotores',
+      texto: [`${nombre} ${a.anio || ''}`.trim(), km, a.precio ? fmtPrecio(a) : 'precio a consultar'].filter(Boolean).join(' · ')
+    }
+  }
+
+  function mensajeAutos(busq, lista) {
+    if (!lista.length) return `En este momento no tenemos ${busq} disponible. Te anotamos y te avisamos apenas entre uno. ¿Querés que te muestre opciones parecidas?`
+    return `Tenemos ${lista.length === 1 ? 'esta opción' : 'estas opciones'} de ${busq}:\n` +
+      lista.map((a, i) => `${i + 1}. ${a.texto}`).join('\n') +
+      `\n¿Te interesa alguna? Te puedo pasar más fotos y datos.`
+  }
+
+  // POST /api/bot/autos   { "auto": "Etios 2018", "anio": "", "limite": 5, "incluir_externos": false }
+  app.post('/api/bot/autos', express.json(), botAuth, async (req, res) => {
+    try {
+      const b = req.body || {}
+      const { modelo, anio } = separarAnio(primero(b, ['auto', 'modelo', 'vehiculo', 'busqueda']), primero(b, ['anio', 'año']))
+      if (!modelo) return res.status(400).json({ ok: false, codigo: 'falta_auto', error: 'Mandá el auto que busca el cliente en "auto"' })
+      const limite = Math.min(Math.max(parseInt(b.limite) || 5, 1), 20)
+      let autos = await buscarAutos(modelo, anio)
+      if (!(b.incluir_externos === true || b.incluir_externos === 'true' || b.incluir_externos === 'si')) autos = autos.filter(esPropio)
+      const lista = autos.slice(0, limite).map(autoParaBot)
+      const busq = [modelo, anio].filter(Boolean).join(' ')
+      res.json({ ok: true, busqueda: { auto: modelo, anio }, encontrados: autos.length, hay_stock: autos.length > 0,
+                 autos: lista, mensaje_cliente: mensajeAutos(busq, lista) })
+    } catch (e) { res.status(500).json({ ok: false, codigo: 'error', error: e.message }) }
+  })
+
+  // arma la respuesta de calificación para el bot a partir del pedido guardado
+  function respuestaCalificacion(sol, extra = {}) {
+    const resuelto = sol.estado === 'resuelto'
+    const descartado = sol.estado === 'descartado'
+    const res = sol.resultados || {}
+    const ar = sol.auto_resultados || {}
+    const bancos = {}
+    BANCOS.forEach(bk => {
+      if (resuelto) {
+        const r = res[bk.key] || {}
+        bancos[bk.key] = { estado: r.estado || 'no_consultado', monto: r.monto || '' }
+      } else {
+        const r = ar[bk.key]
+        bancos[bk.key] = r ? { estado: r.estado === 'ERROR' ? 'error' : estadoForm(r.estado) === 'no_consultado' ? 'revisar' : estadoForm(r.estado), monto: montoEntero(r.monto) }
+                           : { estado: 'pendiente', monto: '' }
+      }
+    })
+    const montos = Object.values(bancos).map(x => Number(x.monto) || 0)
+    const montoMax = Math.max(0, ...montos)
+    const nombre = (sol.nombre || '').split(' ')[0]
+    let estado = resuelto ? 'resuelto' : descartado ? 'descartado' : 'pendiente'
+    let resultado = resuelto ? sol.resultado : null
+    let mensaje
+    if (resultado === 'califica') {
+      mensaje = `¡Buenas noticias${nombre ? ', ' + nombre : ''}! Tenés una línea de crédito disponible para financiar tu auto. Un asesor te contacta para armar la propuesta con las cuotas.`
+    } else if (resultado === 'no_califica') {
+      mensaje = `${nombre ? nombre + ', p' : 'P'}or ahora los bancos con los que trabajamos no tienen una oferta de crédito para tu CUIL. Igual hay otras opciones (contado, permuta o con garante): un asesor te contacta para verlas.`
+    } else if (descartado) {
+      mensaje = 'Un asesor va a revisar tu consulta y te contacta.'
+    } else {
+      mensaje = 'Estamos consultando tu CUIL con los bancos. En unos minutos te confirmamos.'
+    }
+    return {
+      ok: true,
+      solicitud_id: sol.id,
+      estado,                       // pendiente | resuelto | descartado
+      resultado,                    // califica | no_califica | null (todavía no)
+      califica: resultado === 'califica' ? true : resultado === 'no_califica' ? false : null,
+      monto_maximo: montoMax ? String(montoMax) : '',
+      bancos,                       // detalle interno por banco (no mandar tal cual al cliente)
+      cuil: sol.cuil, cuil_valido: sol.cuil_valido !== false,
+      lead_id: sol.lead_id || '',
+      detalle: sol.auto_msg || '',
+      mensaje_cliente: mensaje,
+      consultar_de_nuevo_en_seg: estado === 'pendiente' ? 30 : 0,
+      ...extra
+    }
+  }
+
+  async function avisarCallback(sol) {
+    if (!sol.callback_url || !/^(https:\/\/|http:\/\/localhost[:\/])/i.test(sol.callback_url)) return
+    try {
+      const headers = { 'Content-Type': 'application/json' }
+      if (/kommo\.com|amocrm/i.test(sol.callback_url) && process.env.KOMMO_TOKEN) headers.Authorization = 'Bearer ' + process.env.KOMMO_TOKEN
+      const r = await fetch(sol.callback_url, { method: 'POST', headers, timeout: 15000,
+        body: JSON.stringify({ evento: 'calificacion_lista', ...respuestaCalificacion(sol) }) })
+      console.log(`[bot] callback pedido ${sol.id} → ${r.status}`)
+    } catch (e) { console.error('[bot] callback:', e.message) }
+  }
+
+  // POST /api/bot/calificar
+  // { "cuil": "20301234563", "auto": "Etios 2018", "nombre": "Juan", "telefono": "351...", "lead_id": "123",
+  //   "esperar_segundos": 20, "callback_url": "https://..." }
+  app.post('/api/bot/calificar', express.json(), botAuth, async (req, res) => {
+    try {
+      const b = req.body || {}
+      const cuil = soloDigitos(primero(b, ['cuil', 'cuit', 'CUIL', 'CUIT']))
+      if (cuil.length !== 11) {
+        return res.status(400).json({ ok: false, codigo: 'cuil_invalido',
+          error: 'El CUIL tiene que tener 11 números',
+          mensaje_cliente: 'Para consultar tu crédito necesito tu CUIL completo (11 números, por ejemplo 20-12345678-3). Lo encontrás en tu recibo de sueldo o en la web de ANSES.' })
+      }
+      if (!validarCuil(cuil)) {
+        return res.status(400).json({ ok: false, codigo: 'cuil_invalido',
+          error: 'El CUIL no pasa la validación (dígito verificador)',
+          mensaje_cliente: 'Ese CUIL no parece correcto. ¿Me lo pasás de nuevo? Son 11 números, por ejemplo 20-12345678-3.' })
+      }
+
+      // si ya se calificó hace poco, se devuelve ese resultado sin volver a consultar los bancos
+      const horas = Math.max(0, Number(process.env.BOT_CACHE_HORAS || 24))
+      if (horas && !(b.forzar === true || b.forzar === 'true')) {
+        const prev = await pool.query(
+          `SELECT * FROM calificaciones_kommo WHERE cuil=$1 AND estado='resuelto' AND resuelto_at > NOW() - ($2 || ' hours')::interval
+           ORDER BY resuelto_at DESC LIMIT 1`, [cuil, String(horas)])
+        if (prev.rows.length) return res.json(respuestaCalificacion(prev.rows[0], { desde_cache: true }))
+      }
+
+      const r = await procesarPedido({
+        cuil,
+        auto: primero(b, ['auto', 'auto_buscado', 'modelo', 'vehiculo']),
+        anio: primero(b, ['anio', 'año']),
+        nombre: primero(b, ['nombre', 'name']),
+        telefono: primero(b, ['telefono', 'phone', 'celular']),
+        lead_id: primero(b, ['lead_id', 'leadId', 'lead']),
+        vendedor: primero(b, ['vendedor', 'responsable']),
+        callback_url: /^(https:\/\/|http:\/\/localhost[:\/])/i.test(String(b.callback_url || '')) ? String(b.callback_url) : '',
+        origen: 'bot',
+        sinAuto: true
+      })
+      if (r.solicitud && r.solicitud.lead_id && kommoListo() && !r.reutilizado) {
+        notaEnLead(r.solicitud.lead_id, r.texto).catch(e => console.error('[bot] nota:', e.message))
+      }
+
+      // esperar un rato por si los bancos contestan rápido
+      const esperar = Math.min(Math.max(parseInt(b.esperar_segundos) || 0, 0), 25)
+      let sol = r.solicitud
+      const hasta = Date.now() + esperar * 1000
+      while (esperar && sol.estado !== 'resuelto' && Date.now() < hasta) {
+        await new Promise(ok => setTimeout(ok, 1500))
+        const q = await pool.query(`SELECT * FROM calificaciones_kommo WHERE id=$1`, [sol.id])
+        if (q.rows.length) sol = q.rows[0]
+      }
+
+      const autos = (r._autos || []).filter(esPropio).slice(0, 5).map(autoParaBot)
+      const extra = { reutilizado: r.reutilizado }
+      if (r.busqueda && r.busqueda.auto) {
+        extra.autos = autos
+        extra.hay_stock = autos.length > 0
+        extra.mensaje_autos = mensajeAutos([r.busqueda.auto, r.busqueda.anio].filter(Boolean).join(' '), autos)
+      }
+      res.json(respuestaCalificacion(sol, extra))
+    } catch (e) { res.status(e.status || 500).json({ ok: false, codigo: 'error', error: e.message }) }
+  })
+
+  // GET /api/bot/calificar/:id      (o /api/bot/calificar?cuil=20301234563)
+  async function leerCalificacion(req, res) {
+    try {
+      let q
+      if (req.params.id) q = await pool.query(`SELECT * FROM calificaciones_kommo WHERE id=$1`, [parseInt(req.params.id) || 0])
+      else {
+        const cuil = soloDigitos(req.query.cuil)
+        if (cuil.length !== 11) return res.status(400).json({ ok: false, codigo: 'cuil_invalido', error: 'Mandá ?cuil= con 11 números o el id' })
+        q = await pool.query(`SELECT * FROM calificaciones_kommo WHERE cuil=$1 ORDER BY created_at DESC LIMIT 1`, [cuil])
+      }
+      if (!q.rows.length) return res.status(404).json({ ok: false, codigo: 'no_existe', error: 'No hay una calificación con ese dato' })
+      res.json(respuestaCalificacion(q.rows[0]))
+    } catch (e) { res.status(500).json({ ok: false, codigo: 'error', error: e.message }) }
+  }
+  app.get('/api/bot/calificar/:id', botAuth, leerCalificacion)
+  app.get('/api/bot/calificar', botAuth, leerCalificacion)
 }
