@@ -513,6 +513,27 @@ function registrarKommo(app, pool, buscarEnStock) {
     res.json(out)
   })
 
+  // ── Lista de embudos y etapas con sus números (para configurar las variables) ──
+  app.get('/api/kommo/etapas', async (req, res) => {
+    if (!kommoListo()) return res.status(400).json({ error: 'Faltan KOMMO_DOMINIO / KOMMO_TOKEN' })
+    try {
+      const r = await kommo('/api/v4/leads/pipelines')
+      const embudos = ((r && r._embedded && r._embedded.pipelines) || []).map(p => ({
+        embudo: p.name, pipeline_id: p.id,
+        etapas: ((p._embedded && p._embedded.statuses) || []).map(s => ({ etapa: s.name, status_id: s.id }))
+      }))
+      const campos = []
+      try {
+        _camposCache = null
+        for (const n of [process.env.KOMMO_CAMPO_CUIL || 'CUIL', process.env.KOMMO_CAMPO_AUTO || 'Auto buscado', process.env.KOMMO_CAMPO_CALIFICACION || 'Calificación']) {
+          const f = await campoLead(n)
+          campos.push({ campo: n, encontrado: !!f, id: f ? f.id : null })
+        }
+      } catch (e) { campos.push({ error: e.message }) }
+      res.json({ embudos, campos_del_lead: campos })
+    } catch (e) { res.status(500).json({ error: e.message }) }
+  })
+
   // ── Pedidos de calificación (los usa el panel "Pedidos Kommo" de Ruthina) ──
   app.get('/api/calificaciones', async (req, res) => {
     try {
