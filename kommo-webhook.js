@@ -886,8 +886,8 @@ function registrarKommo(app, pool, buscarEnStock) {
   })
 
   // arma la respuesta de calificación para el bot a partir del pedido guardado
-  // Respuesta para el bot: SIN MONTOS (el cliente nunca ve cuánto aprobó cada banco).
-  // Los montos quedan solo en el panel interno de Ruthina.
+  // Respuesta para el bot: trae los montos para uso interno del bot,
+  // pero mensaje_cliente NUNCA los menciona (solo nombra los bancos que aprobaron).
   const NOMBRE_BANCO = { bancor: 'Bancor', nacion: 'Banco Nación', galicia: 'Banco Galicia', decreditos: 'decreditos' }
   function listaBancos(nombres) {
     if (nombres.length <= 1) return nombres.join('')
@@ -902,13 +902,14 @@ function registrarKommo(app, pool, buscarEnStock) {
     BANCOS.forEach(bk => {
       if (resuelto) {
         const r = res[bk.key] || {}
-        bancos[bk.key] = { estado: r.estado || 'no_consultado' }
+        bancos[bk.key] = { estado: r.estado || 'no_consultado', monto: r.monto || '' }
       } else {
         const r = ar[bk.key]
-        bancos[bk.key] = r ? { estado: r.estado === 'ERROR' ? 'error' : estadoForm(r.estado) === 'no_consultado' ? 'revisar' : estadoForm(r.estado) }
-                           : { estado: 'pendiente' }
+        bancos[bk.key] = r ? { estado: r.estado === 'ERROR' ? 'error' : estadoForm(r.estado) === 'no_consultado' ? 'revisar' : estadoForm(r.estado), monto: montoEntero(r.monto) }
+                           : { estado: 'pendiente', monto: '' }
       }
     })
+    const montoMax = Math.max(0, ...Object.values(bancos).map(x => Number(x.monto) || 0))
     const aprobados = BANCOS.filter(bk => bancos[bk.key].estado === 'aprobado').map(bk => NOMBRE_BANCO[bk.key])
     const nombre = (sol.nombre || '').split(' ')[0]
     const estado = resuelto ? 'resuelto' : descartado ? 'descartado' : 'pendiente'
@@ -925,15 +926,17 @@ function registrarKommo(app, pool, buscarEnStock) {
     }
     const ETQ = { aprobado: 'aprobado', rechazado: 'rechazado', no_consultado: 'no consultado', pendiente: 'pendiente', revisar: 'a revisar', error: 'con error' }
     const detalle = BANCOS.filter(bk => bancos[bk.key].estado !== 'no_consultado')
-      .map(bk => `${NOMBRE_BANCO[bk.key]}: ${ETQ[bancos[bk.key].estado] || bancos[bk.key].estado}`).join(' · ')
+      .map(bk => `${NOMBRE_BANCO[bk.key]}: ${ETQ[bancos[bk.key].estado] || bancos[bk.key].estado}` +
+        (bancos[bk.key].monto ? ` $${Number(bancos[bk.key].monto).toLocaleString('es-AR')}` : '')).join(' · ')
     return {
       ok: true,
       solicitud_id: sol.id,
       estado,                       // pendiente | resuelto | descartado
       resultado,                    // califica | no_califica | null (todavía no)
       califica: resultado === 'califica' ? true : resultado === 'no_califica' ? false : null,
+      monto_maximo: montoMax ? String(montoMax) : '',   // uso interno del bot: NO mostrar al cliente
       bancos_aprobados: aprobados,  // ej. ["Bancor", "Banco Nación"]
-      bancos,                       // estado por banco, sin montos
+      bancos,                       // estado y monto por banco (uso interno: NO mostrar al cliente)
       cuil: sol.cuil, cuil_valido: sol.cuil_valido !== false,
       lead_id: sol.lead_id || '',
       detalle,
