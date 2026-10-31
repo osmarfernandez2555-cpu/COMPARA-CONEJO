@@ -886,6 +886,13 @@ function registrarKommo(app, pool, buscarEnStock) {
   })
 
   // arma la respuesta de calificación para el bot a partir del pedido guardado
+  // Respuesta para el bot: SIN MONTOS (el cliente nunca ve cuánto aprobó cada banco).
+  // Los montos quedan solo en el panel interno de Ruthina.
+  const NOMBRE_BANCO = { bancor: 'Bancor', nacion: 'Banco Nación', galicia: 'Banco Galicia', decreditos: 'decreditos' }
+  function listaBancos(nombres) {
+    if (nombres.length <= 1) return nombres.join('')
+    return nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1]
+  }
   function respuestaCalificacion(sol, extra = {}) {
     const resuelto = sol.estado === 'resuelto'
     const descartado = sol.estado === 'descartado'
@@ -895,21 +902,20 @@ function registrarKommo(app, pool, buscarEnStock) {
     BANCOS.forEach(bk => {
       if (resuelto) {
         const r = res[bk.key] || {}
-        bancos[bk.key] = { estado: r.estado || 'no_consultado', monto: r.monto || '' }
+        bancos[bk.key] = { estado: r.estado || 'no_consultado' }
       } else {
         const r = ar[bk.key]
-        bancos[bk.key] = r ? { estado: r.estado === 'ERROR' ? 'error' : estadoForm(r.estado) === 'no_consultado' ? 'revisar' : estadoForm(r.estado), monto: montoEntero(r.monto) }
-                           : { estado: 'pendiente', monto: '' }
+        bancos[bk.key] = r ? { estado: r.estado === 'ERROR' ? 'error' : estadoForm(r.estado) === 'no_consultado' ? 'revisar' : estadoForm(r.estado) }
+                           : { estado: 'pendiente' }
       }
     })
-    const montos = Object.values(bancos).map(x => Number(x.monto) || 0)
-    const montoMax = Math.max(0, ...montos)
+    const aprobados = BANCOS.filter(bk => bancos[bk.key].estado === 'aprobado').map(bk => NOMBRE_BANCO[bk.key])
     const nombre = (sol.nombre || '').split(' ')[0]
-    let estado = resuelto ? 'resuelto' : descartado ? 'descartado' : 'pendiente'
-    let resultado = resuelto ? sol.resultado : null
+    const estado = resuelto ? 'resuelto' : descartado ? 'descartado' : 'pendiente'
+    const resultado = resuelto ? sol.resultado : null
     let mensaje
     if (resultado === 'califica') {
-      mensaje = `¡Buenas noticias${nombre ? ', ' + nombre : ''}! Tenés una línea de crédito disponible para financiar tu auto. Un asesor te contacta para armar la propuesta con las cuotas.`
+      mensaje = `¡Buenas noticias${nombre ? ', ' + nombre : ''}! Tenés crédito aprobado en ${listaBancos(aprobados) || 'uno de nuestros bancos'} para financiar tu auto. Un asesor te contacta para armar la propuesta con las cuotas.`
     } else if (resultado === 'no_califica') {
       mensaje = `${nombre ? nombre + ', p' : 'P'}or ahora los bancos con los que trabajamos no tienen una oferta de crédito para tu CUIL. Igual hay otras opciones (contado, permuta o con garante): un asesor te contacta para verlas.`
     } else if (descartado) {
@@ -917,17 +923,20 @@ function registrarKommo(app, pool, buscarEnStock) {
     } else {
       mensaje = 'Estamos consultando tu CUIL con los bancos. En unos minutos te confirmamos.'
     }
+    const ETQ = { aprobado: 'aprobado', rechazado: 'rechazado', no_consultado: 'no consultado', pendiente: 'pendiente', revisar: 'a revisar', error: 'con error' }
+    const detalle = BANCOS.filter(bk => bancos[bk.key].estado !== 'no_consultado')
+      .map(bk => `${NOMBRE_BANCO[bk.key]}: ${ETQ[bancos[bk.key].estado] || bancos[bk.key].estado}`).join(' · ')
     return {
       ok: true,
       solicitud_id: sol.id,
       estado,                       // pendiente | resuelto | descartado
       resultado,                    // califica | no_califica | null (todavía no)
       califica: resultado === 'califica' ? true : resultado === 'no_califica' ? false : null,
-      monto_maximo: montoMax ? String(montoMax) : '',
-      bancos,                       // detalle interno por banco (no mandar tal cual al cliente)
+      bancos_aprobados: aprobados,  // ej. ["Bancor", "Banco Nación"]
+      bancos,                       // estado por banco, sin montos
       cuil: sol.cuil, cuil_valido: sol.cuil_valido !== false,
       lead_id: sol.lead_id || '',
-      detalle: sol.auto_msg || '',
+      detalle,
       mensaje_cliente: mensaje,
       consultar_de_nuevo_en_seg: estado === 'pendiente' ? 30 : 0,
       ...extra
