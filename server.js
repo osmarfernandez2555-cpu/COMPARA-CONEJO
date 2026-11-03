@@ -1219,8 +1219,229 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
 });
 // ── FIN VENDEDORES ────────────────────────────────────────────────────────────
 
-// ── KOMMO: webhook para pedir autos y calificar clientes por banco ───────────
-require('./kommo-webhook')(app, pool, buscarEnStock)
+// ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
+// Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
+// Variables de entorno en Railway: KOMMO_TOKEN (obligatoria, token de larga duración),
+// KOMMO_SUBDOMAIN (opcional, por defecto admtutuautomotores), KOMMO_PANEL_PASS (opcional, por defecto tutu2026)
+const crypto = require('crypto')
+const KOMMO_SUBDOMAIN = process.env.KOMMO_SUBDOMAIN || 'admtutuautomotores'
+const KOMMO_BASE = process.env.KOMMO_BASE_URL || `https://${KOMMO_SUBDOMAIN}.kommo.com`
+const KOMMO_PASS = process.env.KOMMO_PANEL_PASS || 'tutu2026'
+const KOMMO_MODEL = process.env.KOMMO_MODEL || 'claude-sonnet-4-6'
+const KOMMO_ANTHROPIC_URL = process.env.KOMMO_ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages'
+const kommoSesiones = new Map()   // token -> expira (ms)
+const kommoIntentos = new Map()   // ip -> { n, hasta }
+const KOMMO_SESION_MS = 12 * 3600 * 1000
+const KOMMO_STATUS_GANADO = 142, KOMMO_STATUS_PERDIDO = 143
+
+function kommoHoyARG() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10) }
+function kommoEpoch(fechaStr, finDelDia) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(fechaStr || ''))
+  if (!m) return null
+  const t = Date.UTC(+m[1], +m[2] - 1, +m[3], 3, 0, 0) / 1000   // 00:00 hora Argentina (UTC-3)
+  return finDelDia ? t + 86399 : t
+}
+function kommoFechaARG(ts) { return ts ? new Date((ts - 3 * 3600) * 1000).toISOString().slice(0, 16).replace('T', ' ') : '' }
+function kommoNorm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim() }
+
+async function kommoGet(pathAndQuery, intento = 0) {
+  if (!process.env.KOMMO_TOKEN) throw new Error('Falta configurar KOMMO_TOKEN en Railway (variables del servicio de Ruthina).')
+  const r = await fetch(KOMMO_BASE + pathAndQuery, { headers: { Authorization: 'Bearer ' + process.env.KOMMO_TOKEN, Accept: 'application/json' } })
+  if (r.status === 204) return {}
+  if (r.status === 429 && intento < 3) { await new Promise(s => setTimeout(s, 1200)); return kommoGet(pathAndQuery, intento + 1) }
+  if (r.status === 401) throw new Error('Kommo rechazó el token (401). Hay que generar uno nuevo y cargarlo en KOMMO_TOKEN.')
+  if (!r.ok) throw new Error('Kommo respondió ' + r.status + ': ' + (await r.text()).slice(0, 200))
+  return r.json()
+}
+function kommoQS(params) {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (Array.isArray(v)) v.forEach(x => p.append(k + '[]', x))
+    else if (v !== undefined && v !== null && v !== '') p.append(k, v)
+  }
+  return p.toString().replace(/%5B/g, '[').replace(/%5D/g, ']')
+}
+async function kommoPaginar(path, params, clave, limite, maxPaginas) {
+  const out = []
+  for (let page = 1; page <= maxPaginas; page++) {
+    const d = await kommoGet(path + '?' + kommoQS({ ...params, limit: limite, page }))
+    const items = (d._embedded && d._embedded[clave]) || []
+    out.push(...items)
+    if (!d._links || !d._links.next || !items.length) return { items: out, truncado: false }
+  }
+  return { items: out, truncado: true }
+}
+
+let kommoCache = { t: 0, usuarios: null, embudos: null }
+async function kommoUsuarios() {
+  if (kommoCache.usuarios && Date.now() - kommoCache.t < 600000) return kommoCache.usuarios
+  const { items } = await kommoPaginar('/api/v4/users', {}, 'users', 250, 4)
+  kommoCache.usuarios = items.map(u => ({ id: u.id, nombre: u.name, email: u.email })); kommoCache.t = Date.now()
+  return kommoCache.usuarios
+}
+async function kommoEmbudos() {
+  if (kommoCache.embudos && Date.now() - kommoCache.t < 600000) return kommoCache.embudos
+  const d = await kommoGet('/api/v4/leads/pipelines')
+  kommoCache.embudos = ((d._embedded && d._embedded.pipelines) || []).map(p => ({
+    id: p.id, nombre: p.name,
+    etapas: (((p._embedded || {}).statuses) || []).map(s => ({ id: s.id, nombre: s.name, tipo: s.id === KOMMO_STATUS_GANADO ? 'ganado' : s.id === KOMMO_STATUS_PERDIDO ? 'perdido' : 'abierto' }))
+  }))
+  return kommoCache.embudos
+}
+async function kommoResolverVendedor(v) {
+  const us = await kommoUsuarios()
+  if (v === undefined || v === null || v === '') return null
+  if (/^\d+$/.test(String(v))) { const u = us.find(x => String(x.id) === String(v)); if (u) return u }
+  const q = kommoNorm(v)
+  const exactos = us.filter(u => kommoNorm(u.nombre) === q)
+  if (exactos.length === 1) return exactos[0]
+  const parc = us.filter(u => kommoNorm(u.nombre).includes(q) || q.includes(kommoNorm(u.nombre)))
+  if (parc.length === 1) return parc[0]
+  if (parc.length > 1) throw new Error('Hay varios vendedores que coinciden con "' + v + '": ' + parc.map(u => u.nombre).join(', ') + '. Pedile al usuario que aclare cuál.')
+  throw new Error('No encontré un vendedor llamado "' + v + '". Vendedores: ' + us.map(u => u.nombre).join(', '))
+}
+async function kommoNombresEtapas() {
+  const mapa = {}
+  for (const p of await kommoEmbudos()) for (const e of p.etapas) mapa[e.id] = { etapa: e.nombre, embudo: p.nombre, tipo: e.tipo }
+  return mapa
+}
+
+const KOMMO_TOOLS = [
+  { name: 'listar_vendedores', description: 'Lista los usuarios (vendedores) de Kommo con su id y nombre.', input_schema: { type: 'object', properties: {} } },
+  { name: 'listar_embudos', description: 'Lista los embudos de Kommo y sus etapas (columnas).', input_schema: { type: 'object', properties: {} } },
+  { name: 'leads_vendedor', description: 'Leads asignados a un vendedor: total, cantidad por embudo y etapa, y un listado de los más recientes. Por defecto solo leads abiertos (ni ganados ni perdidos).', input_schema: { type: 'object', properties: {
+    vendedor: { type: 'string', description: 'Nombre (o parte) o id del vendedor. Si se omite, cuenta los leads de todo el equipo.' },
+    estado: { type: 'string', enum: ['abiertos', 'ganados', 'perdidos', 'todos'], description: 'Por defecto abiertos.' },
+    creados_desde: { type: 'string', description: 'YYYY-MM-DD (hora Argentina). Opcional.' },
+    creados_hasta: { type: 'string', description: 'YYYY-MM-DD. Opcional.' } } } },
+  { name: 'actividad_vendedor', description: 'Actividad de comunicación en un rango de fechas: mensajes y llamadas salientes, y con CUÁNTOS clientes distintos habló (conversaciones distintas con mensajes salientes). Sin vendedor devuelve el ranking de todo el equipo. Por defecto es el día de hoy.', input_schema: { type: 'object', properties: {
+    vendedor: { type: 'string', description: 'Nombre o id. Si se omite, todo el equipo.' },
+    desde: { type: 'string', description: 'YYYY-MM-DD hora Argentina. Por defecto hoy.' },
+    hasta: { type: 'string', description: 'YYYY-MM-DD. Por defecto igual a desde.' } } } },
+  { name: 'buscar_lead', description: 'Busca leads por texto (nombre del lead, teléfono, etc.) y muestra etapa y vendedor.', input_schema: { type: 'object', properties: { texto: { type: 'string' } }, required: ['texto'] } }
+]
+
+async function kommoHerramienta(nombre, a) {
+  a = a || {}
+  if (nombre === 'listar_vendedores') return await kommoUsuarios()
+  if (nombre === 'listar_embudos') return await kommoEmbudos()
+  if (nombre === 'leads_vendedor') {
+    const u = await kommoResolverVendedor(a.vendedor)
+    const estado = a.estado || 'abiertos'
+    const params = {}
+    if (u) params['filter[responsible_user_id]'] = [u.id]
+    const d1 = kommoEpoch(a.creados_desde, false), d2 = kommoEpoch(a.creados_hasta, true)
+    if (d1) params['filter[created_at][from]'] = d1
+    if (d2) params['filter[created_at][to]'] = d2
+    const { items, truncado } = await kommoPaginar('/api/v4/leads', params, 'leads', 250, 12)
+    const etapas = await kommoNombresEtapas()
+    const sel = items.filter(l => estado === 'todos' || (estado === 'abiertos' ? ![142, 143].includes(l.status_id) : estado === 'ganados' ? l.status_id === 142 : l.status_id === 143))
+    const porEtapa = {}
+    sel.forEach(l => { const e = etapas[l.status_id] || { etapa: 'etapa ' + l.status_id, embudo: '?' }; const k = e.embudo + ' › ' + e.etapa; porEtapa[k] = (porEtapa[k] || 0) + 1 })
+    const us = await kommoUsuarios()
+    const nom = id => (us.find(x => x.id === id) || {}).nombre || String(id)
+    return {
+      vendedor: u ? u.nombre : 'todo el equipo', estado, total: sel.length,
+      aviso: truncado ? 'Hay más leads de los que se pudieron leer; el total es un mínimo.' : undefined,
+      por_etapa: Object.entries(porEtapa).sort((x, y) => y[1] - x[1]).map(([etapa, cantidad]) => ({ etapa, cantidad })),
+      ultimos: sel.sort((x, y) => (y.updated_at || 0) - (x.updated_at || 0)).slice(0, 40).map(l => ({
+        id: l.id, nombre: l.name, vendedor: u ? undefined : nom(l.responsible_user_id), etapa: (etapas[l.status_id] || {}).etapa, precio: l.price || undefined,
+        creado: kommoFechaARG(l.created_at), ultima_actualizacion: kommoFechaARG(l.updated_at) }))
+    }
+  }
+  if (nombre === 'actividad_vendedor') {
+    const u = await kommoResolverVendedor(a.vendedor)
+    const desde = a.desde || kommoHoyARG(), hasta = a.hasta || desde
+    const params = { 'filter[type]': ['outgoing_chat_message', 'outgoing_call'],
+      'filter[created_at][from]': kommoEpoch(desde, false), 'filter[created_at][to]': kommoEpoch(hasta, true) }
+    if (u) params['filter[created_by]'] = [u.id]
+    const { items, truncado } = await kommoPaginar('/api/v4/events', params, 'events', 100, 40)
+    const us = await kommoUsuarios()
+    const por = {}
+    items.forEach(ev => {
+      const uid = ev.created_by
+      if (!uid || (u && uid !== u.id)) return
+      const p = por[uid] = por[uid] || { msgs: 0, llamadas: 0, convs: new Set() }
+      if (ev.type === 'outgoing_chat_message') { p.msgs++; p.convs.add(ev.entity_type + ':' + ev.entity_id) }
+      else if (ev.type === 'outgoing_call') p.llamadas++
+    })
+    const filas = Object.entries(por).map(([uid, p]) => ({
+      vendedor: (us.find(x => String(x.id) === String(uid)) || {}).nombre || ('usuario ' + uid),
+      clientes_distintos_con_mensaje_saliente: p.convs.size, mensajes_salientes: p.msgs, llamadas_salientes: p.llamadas }))
+      .sort((x, y) => y.clientes_distintos_con_mensaje_saliente - x.clientes_distintos_con_mensaje_saliente)
+    return { desde, hasta, vendedor: u ? u.nombre : 'todo el equipo',
+      aviso: truncado ? 'El período tiene tantos eventos que se leyó solo una parte; las cifras son un mínimo.' : undefined,
+      nota: 'Se cuenta lo que el vendedor envió o llamó; los mensajes entrantes de clientes no se atribuyen a un vendedor.',
+      resultado: u ? (filas[0] || { vendedor: u.nombre, clientes_distintos_con_mensaje_saliente: 0, mensajes_salientes: 0, llamadas_salientes: 0 }) : filas }
+  }
+  if (nombre === 'buscar_lead') {
+    const d = await kommoGet('/api/v4/leads?' + kommoQS({ query: String(a.texto || '').slice(0, 80), limit: 15 }))
+    const ls = (d._embedded && d._embedded.leads) || []
+    const etapas = await kommoNombresEtapas(), us = await kommoUsuarios()
+    return { encontrados: ls.length, leads: ls.map(l => ({ id: l.id, nombre: l.name, etapa: (etapas[l.status_id] || {}).etapa, embudo: (etapas[l.status_id] || {}).embudo,
+      vendedor: (us.find(x => x.id === l.responsible_user_id) || {}).nombre, precio: l.price || undefined, creado: kommoFechaARG(l.created_at), ultima_actualizacion: kommoFechaARG(l.updated_at) })) }
+  }
+  throw new Error('Herramienta desconocida: ' + nombre)
+}
+
+function kommoAuth(req, res, next) {
+  const t = req.headers['x-kommo-token']
+  const exp = t && kommoSesiones.get(t)
+  if (!exp || exp < Date.now()) { if (t) kommoSesiones.delete(t); return res.status(401).json({ error: 'sesion' }) }
+  next()
+}
+app.post('/api/kommo/login', (req, res) => {
+  const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim()
+  const reg = kommoIntentos.get(ip) || { n: 0, hasta: 0 }
+  if (reg.hasta > Date.now()) return res.status(429).json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' })
+  const a = Buffer.from(String((req.body && req.body.password) || '')), b = Buffer.from(KOMMO_PASS)
+  const ok = a.length === b.length && crypto.timingSafeEqual(a, b)
+  if (!ok) {
+    reg.n++; if (reg.n >= 5) { reg.hasta = Date.now() + 10 * 60000; reg.n = 0 }
+    kommoIntentos.set(ip, reg)
+    return res.status(401).json({ error: 'Contraseña incorrecta' })
+  }
+  kommoIntentos.delete(ip)
+  const token = crypto.randomBytes(24).toString('hex')
+  kommoSesiones.set(token, Date.now() + KOMMO_SESION_MS)
+  res.json({ ok: true, token, configurado: !!process.env.KOMMO_TOKEN })
+})
+app.post('/api/kommo/chat', kommoAuth, async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'Falta ANTHROPIC_API_KEY en el servidor.' })
+  const hist = Array.isArray(req.body && req.body.messages) ? req.body.messages.slice(-20) : []
+  const messages = hist.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim()).map(m => ({ role: m.role, content: m.content.slice(0, 4000) }))
+  if (!messages.length || messages[messages.length - 1].role !== 'user') return res.status(400).json({ error: 'Mensaje vacío' })
+  const system = `Sos el asistente de Kommo CRM de Tutu Automotores (concesionaria de Córdoba, Argentina). Respondés en español rioplatense, claro y breve. Hoy es ${kommoHoyARG()} (hora de Argentina).
+Consultás Kommo SOLO en modo lectura con las herramientas; nunca podés modificar nada en Kommo, y si te lo piden, decí que este panel es solo de consulta.
+Reglas: usá siempre las herramientas para obtener datos y nunca inventes cifras. Si una herramienta devuelve un aviso o un error, decíselo al usuario. Si el nombre del vendedor es ambiguo, preguntá cuál. "Hoy" es el día de hoy en hora argentina. Cuando hables de "con cuántos habló", explicá que son clientes distintos a los que el vendedor les envió al menos un mensaje en Kommo. Presentá listas con guiones, sin tablas.`
+  const usadas = []
+  try {
+    for (let i = 0; i < 8; i++) {
+      const r = await fetch(KOMMO_ANTHROPIC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: KOMMO_MODEL, max_tokens: 1500, system, tools: KOMMO_TOOLS, messages }) })
+      const d = await r.json()
+      if (!r.ok) { console.error('❌ Kommo chat Anthropic:', r.status, JSON.stringify(d).slice(0, 300)); return res.status(502).json({ error: (d.error && d.error.message) || 'Error de la IA' }) }
+      const usos = (d.content || []).filter(b => b.type === 'tool_use')
+      if (d.stop_reason !== 'tool_use' || !usos.length) {
+        const texto = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim()
+        return res.json({ respuesta: texto || 'No pude armar una respuesta.', herramientas: usadas })
+      }
+      messages.push({ role: 'assistant', content: d.content })
+      const resultados = []
+      for (const u of usos) {
+        usadas.push(u.name)
+        let contenido, esError = false
+        try { contenido = JSON.stringify(await kommoHerramienta(u.name, u.input)).slice(0, 40000) }
+        catch (e) { contenido = 'Error: ' + e.message; esError = true; console.error('Kommo herramienta', u.name, e.message) }
+        resultados.push({ type: 'tool_result', tool_use_id: u.id, content: contenido, is_error: esError })
+      }
+      messages.push({ role: 'user', content: resultados })
+    }
+    res.json({ respuesta: 'La consulta requirió demasiados pasos. Probá con una pregunta más puntual.', herramientas: usadas })
+  } catch (e) { console.error('Kommo chat:', e.message); res.status(500).json({ error: e.message }) }
+})
+// ── FIN KOMMO ────────────────────────────────────────────────────────
 
 app.use(express.static(path.join(__dirname, 'public')))
 
