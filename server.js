@@ -1219,6 +1219,9 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
 });
 // ── FIN VENDEDORES ────────────────────────────────────────────────────────────
 
+// ── KOMMO: webhook para pedir autos y calificar clientes por banco ───────────
+require('./kommo-webhook')(app, pool, buscarEnStock)
+
 // ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
 // Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
 // Variables de entorno en Railway: KOMMO_TOKEN (obligatoria, token de larga duración),
