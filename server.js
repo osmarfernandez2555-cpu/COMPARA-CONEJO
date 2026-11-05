@@ -1369,6 +1369,9 @@ const KOMMO_TOOLS = [
     vendedor: { type: 'string', description: 'Nombre o id. Si se omite, todo el equipo.' },
     desde: { type: 'string', description: 'YYYY-MM-DD hora Argentina. Por defecto hoy.' },
     hasta: { type: 'string', description: 'YYYY-MM-DD. Por defecto igual a desde.' } } } },
+  { name: 'mensajes_sin_contestar', description: 'Conversaciones de chat donde el ÚLTIMO mensaje fue del cliente y ningún vendedor respondió después, agrupadas por vendedor (el responsable del lead). Ignora leads ya ganados o perdidos. Mira los últimos N días (por defecto 7). Devuelve cantidad por vendedor, cuánto hace que espera el más antiguo y ejemplos.', input_schema: { type: 'object', properties: {
+    vendedor: { type: 'string', description: 'Nombre o id. Si se omite, todo el equipo.' },
+    dias: { type: 'number', description: 'Cuántos días hacia atrás mirar (1 a 30). Por defecto 7.' } } } },
   { name: 'buscar_lead', description: 'Busca leads por texto (nombre del lead, teléfono, etc.) y muestra etapa y vendedor.', input_schema: { type: 'object', properties: { texto: { type: 'string' } }, required: ['texto'] } }
 ]
 
@@ -1425,6 +1428,50 @@ async function kommoHerramienta(nombre, a) {
       nota: 'Se cuenta lo que el vendedor envió o llamó; los mensajes entrantes de clientes no se atribuyen a un vendedor.',
       resultado: u ? (filas[0] || { vendedor: u.nombre, clientes_distintos_con_mensaje_saliente: 0, mensajes_salientes: 0, llamadas_salientes: 0 }) : filas }
   }
+  if (nombre === 'mensajes_sin_contestar') {
+    const u = await kommoResolverVendedor(a.vendedor)
+    const dias = Math.min(Math.max(Math.round(Number(a.dias) || 7), 1), 30)
+    const ahora = Math.floor(Date.now() / 1000)
+    const params = { 'filter[type]': ['incoming_chat_message', 'outgoing_chat_message'], 'filter[created_at][from]': ahora - dias * 86400, 'filter[created_at][to]': ahora }
+    const { items, truncado } = await kommoPaginar('/api/v4/events', params, 'events', 100, 60)
+    // última actividad de cada conversación (lead o contacto)
+    const ultimo = {}
+    items.forEach(ev => {
+      if (!ev.entity_id || !ev.created_at) return
+      const k = ev.entity_type + ':' + ev.entity_id
+      if (!ultimo[k] || ev.created_at > ultimo[k].t) ultimo[k] = { t: ev.created_at, entrante: ev.type === 'incoming_chat_message', tipo: ev.entity_type, id: ev.entity_id }
+    })
+    const pendientes = Object.values(ultimo).filter(x => x.entrante)
+    const ids = tipo => pendientes.filter(x => x.tipo === tipo).map(x => x.id)
+    const info = {}   // 'lead:ID' -> { nombre, responsable, status }
+    for (const [tipo, ruta, clave] of [['lead', '/api/v4/leads', 'leads'], ['contact', '/api/v4/contacts', 'contacts']]) {
+      const lista = ids(tipo)
+      for (let i = 0; i < lista.length; i += 50) {
+        const d = await kommoGet(ruta + '?' + kommoQS({ 'filter[id]': lista.slice(i, i + 50), limit: 250 }))
+        for (const e of ((d._embedded && d._embedded[clave]) || [])) info[tipo + ':' + e.id] = { nombre: e.name, responsable: e.responsible_user_id, status: e.status_id }
+      }
+    }
+    const us = await kommoUsuarios()
+    const nom = id => (us.find(x => x.id === id) || {}).nombre || ('usuario ' + id)
+    const por = {}
+    let cerrados = 0, sinDatos = 0
+    pendientes.forEach(x => {
+      const e = info[x.tipo + ':' + x.id]
+      if (!e) { sinDatos++; return }
+      if (x.tipo === 'lead' && (e.status === KOMMO_STATUS_GANADO || e.status === KOMMO_STATUS_PERDIDO)) { cerrados++; return }
+      if (u && e.responsable !== u.id) return
+      const p = por[e.responsable] = por[e.responsable] || { lista: [] }
+      p.lista.push({ id: x.id, tipo: x.tipo === 'lead' ? 'lead' : 'contacto', cliente: e.nombre, espera_horas: Math.round((ahora - x.t) / 360) / 10, ultimo_mensaje_del_cliente: kommoFechaARG(x.t) })
+    })
+    const filas = Object.entries(por).map(([uid, p]) => {
+      p.lista.sort((m, n) => n.espera_horas - m.espera_horas)
+      return { vendedor: nom(Number(uid)), sin_contestar: p.lista.length, espera_mas_larga_horas: p.lista[0].espera_horas, ejemplos_mas_antiguos: p.lista.slice(0, 5) }
+    }).sort((m, n) => n.sin_contestar - m.sin_contestar)
+    return { dias_revisados: dias, vendedor: u ? u.nombre : 'todo el equipo',
+      total_sin_contestar: filas.reduce((s, f) => s + f.sin_contestar, 0), por_vendedor: filas,
+      aviso: truncado ? 'Hay tantos mensajes en el período que se leyó solo una parte; los números pueden ser menores a los reales. Probá con menos días.' : undefined,
+      nota: 'Cuenta conversaciones cuyo último mensaje es del cliente y nadie respondió después. No cuenta leads ganados/perdidos (' + cerrados + ' ignorados).' + (sinDatos ? ' ' + sinDatos + ' conversaciones no se pudieron asignar a un lead o contacto.' : '') }
+  }
   if (nombre === 'buscar_lead') {
     const d = await kommoGet('/api/v4/leads?' + kommoQS({ query: String(a.texto || '').slice(0, 80), limit: 15 }))
     const ls = (d._embedded && d._embedded.leads) || []
@@ -1465,7 +1512,7 @@ app.post('/api/kommo/chat', kommoAuth, async (req, res) => {
   if (!messages.length || messages[messages.length - 1].role !== 'user') return res.status(400).json({ error: 'Mensaje vacío' })
   const system = `Sos el asistente de Kommo CRM de Tutu Automotores (concesionaria de Córdoba, Argentina). Respondés en español rioplatense, claro y breve. Hoy es ${kommoHoyARG()} (hora de Argentina).
 Consultás Kommo SOLO en modo lectura con las herramientas; nunca podés modificar nada en Kommo, y si te lo piden, decí que este panel es solo de consulta.
-Reglas: usá siempre las herramientas para obtener datos y nunca inventes cifras. Si una herramienta devuelve un aviso o un error, decíselo al usuario. Si el nombre del vendedor es ambiguo, preguntá cuál. "Hoy" es el día de hoy en hora argentina. Cuando hables de "con cuántos habló", explicá que son clientes distintos a los que el vendedor les envió al menos un mensaje en Kommo. Presentá listas con guiones, sin tablas.`
+Reglas: usá siempre las herramientas para obtener datos y nunca inventes cifras. Si una herramienta devuelve un aviso o un error, decíselo al usuario. Si el nombre del vendedor es ambiguo, preguntá cuál. "Hoy" es el día de hoy en hora argentina. Para "mensajes sin contestar" usá la herramienta mensajes_sin_contestar y aclará que son conversaciones donde el último mensaje fue del cliente. Cuando hables de "con cuántos habló", explicá que son clientes distintos a los que el vendedor les envió al menos un mensaje en Kommo. Presentá listas con guiones, sin tablas.`
   const usadas = []
   try {
     for (let i = 0; i < 8; i++) {
