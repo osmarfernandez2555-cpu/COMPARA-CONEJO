@@ -69,6 +69,11 @@ async function initDB() {
   await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS ubicacion TEXT DEFAULT 'Tutu Automotores'`).catch(()=>{})
+  // Papelera: todo auto que se borra solo por antigüedad se guarda acá 90 días, para poder recuperarlo
+  await pool.query(`CREATE TABLE IF NOT EXISTS stock_borrado (
+    id INTEGER, marca TEXT, modelo TEXT, version TEXT, anio TEXT, km INTEGER, color TEXT, precio TEXT, moneda TEXT, estado TEXT, notas TEXT,
+    created_at TIMESTAMP, updated_at TIMESTAMP, telefono TEXT, origen TEXT, ubicacion TEXT,
+    borrado_en TIMESTAMP DEFAULT NOW(), motivo TEXT)`).catch(e => console.error('stock_borrado:', e.message))
   console.log('✅ DB lista')
 }
 initDB().catch(e => console.error('DB init error:', e.message))
@@ -189,19 +194,62 @@ app.post('/api/stock/import', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
+// Todo lo que se borra solo pasa primero por la papelera (tabla stock_borrado, 90 días).
+const STOCK_COLS = 'id,marca,modelo,version,anio,km,color,precio,moneda,estado,notas,created_at,updated_at,telefono,origen,ubicacion'
+async function stockArchivarYBorrar(where, params, motivo) {
+  const r = await pool.query(
+    `WITH del AS (DELETE FROM stock WHERE ${where} RETURNING ${STOCK_COLS})
+     INSERT INTO stock_borrado (${STOCK_COLS}, motivo) SELECT ${STOCK_COLS}, $${params.length + 1} FROM del`,
+    [...params, motivo])
+  return r.rowCount
+}
+// Antigüedad máxima de CUALQUIER auto del stock. STOCK_MAX_DIAS (por defecto 30; 0 = no borrar nunca).
+// STOCK_BASE_FECHA: 'carga' (por defecto, días desde que se cargó) o 'actualizacion' (días desde la última vez que se tocó o se volvió a publicar).
+function stockFechaBase() { return (process.env.STOCK_BASE_FECHA || 'carga') === 'actualizacion' ? 'COALESCE(updated_at, created_at)' : 'created_at' }
+function stockMaxDias() { const d = Number(process.env.STOCK_MAX_DIAS ?? 30); return d >= 1 ? d : 0 }
+
 // Limpieza: los avisos cargados desde grupos que nadie volvió a publicar en N días
 // se borran solos (se asume que ya se vendieron). Cambiable con STOCK_GRUPO_DIAS; 0 = no borrar nunca.
-setInterval(async () => {
+async function limpiarStockViejo() {
   try {
-    const dias = Number(process.env.STOCK_GRUPO_DIAS ?? 21)
-    if (!dias || dias < 1) return
-    const r = await pool.query(
-      `DELETE FROM stock WHERE origen='grupo' AND COALESCE(updated_at, created_at) < NOW() - ($1 || ' days')::interval`,
-      [String(dias)]
-    )
-    if (r.rowCount > 0) console.log(`[STOCK] Limpieza: ${r.rowCount} avisos de grupos con más de ${dias} días sin repostear`)
+    const diasGrupo = Number(process.env.STOCK_GRUPO_DIAS ?? 21)
+    if (diasGrupo >= 1) {
+      const n = await stockArchivarYBorrar(`origen='grupo' AND COALESCE(updated_at, created_at) < NOW() - ($1 || ' days')::interval`, [String(diasGrupo)], `grupo: ${diasGrupo} días sin repostear`)
+      if (n > 0) console.log(`[STOCK] Limpieza: ${n} avisos de grupos con más de ${diasGrupo} días sin repostear (guardados en la papelera)`)
+    }
+    const dias = stockMaxDias()
+    if (dias) {
+      const n = await stockArchivarYBorrar(`${stockFechaBase()} < NOW() - ($1 || ' days')::interval`, [String(dias)], `más de ${dias} días en el stock`)
+      if (n > 0) console.log(`[STOCK] Limpieza: ${n} autos con más de ${dias} días en el stock (guardados en la papelera 90 días)`)
+    }
+    await pool.query(`DELETE FROM stock_borrado WHERE borrado_en < NOW() - INTERVAL '90 days'`)
   } catch(e) { console.error('[STOCK] Error en limpieza:', e.message) }
-}, 6 * 60 * 60 * 1000)
+}
+setInterval(limpiarStockViejo, 6 * 60 * 60 * 1000)
+
+// Ver qué se borraría en la próxima limpieza (no borra nada)
+app.get('/api/stock/vencidos', async (req, res) => {
+  try {
+    const dias = stockMaxDias()
+    if (!dias) return res.json({ activo: false, mensaje: 'STOCK_MAX_DIAS=0: no se borra nada por antigüedad' })
+    const r = await pool.query(
+      `SELECT id, marca, modelo, version, anio, ubicacion, origen, created_at, updated_at FROM stock
+       WHERE ${stockFechaBase()} < NOW() - ($1 || ' days')::interval ORDER BY ${stockFechaBase()}`, [String(dias)])
+    res.json({ activo: true, dias, base: process.env.STOCK_BASE_FECHA || 'carga', cantidad: r.rowCount, autos: r.rows })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
+// Recuperar lo que se borró solo en las últimas N horas (por defecto 48). Vuelven como recién cargados.
+app.post('/api/stock/restaurar', async (req, res) => {
+  try {
+    if (process.env.IMPORT_KEY && req.headers['x-import-key'] !== process.env.IMPORT_KEY) return res.status(401).json({ error: 'No autorizado' })
+    const horas = Math.min(Math.max(Number(req.body && req.body.horas) || 48, 1), 24 * 90)
+    const cols = 'id,marca,modelo,version,anio,km,color,precio,moneda,estado,notas,telefono,origen,ubicacion'
+    const r = await pool.query(
+      `WITH rest AS (DELETE FROM stock_borrado WHERE borrado_en > NOW() - ($1 || ' hours')::interval RETURNING ${cols})
+       INSERT INTO stock (${cols}) SELECT ${cols} FROM rest ON CONFLICT (id) DO NOTHING`, [String(horas)])
+    res.json({ ok: true, restaurados: r.rowCount, horas })
+  } catch(e) { res.status(500).json({ error: e.message }) }
+})
 
 
 // ── Stock: eliminar por ID ───────────────────────────────────
