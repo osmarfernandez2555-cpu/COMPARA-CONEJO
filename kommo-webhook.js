@@ -3,7 +3,8 @@
 // ───────────────────────────────────────────────────────────────────────────
 //  Kommo manda CUIL + auto que busca el cliente  →  Ruthina:
 //    1. Busca el auto en el stock y lo devuelve (y lo deja como nota en el lead)
-//    2. Guarda/actualiza el cliente en la base de clientes de Ruthina
+//    2. NO crea leads en Ruthina (Kommo ya tiene el lead; así no se duplican). El pedido queda en "Pedidos Kommo".
+//       Para volver al comportamiento viejo (crear el lead en Match → Clientes cargados): KOMMO_CREAR_LEADS=si
 //    3. Crea un "pedido de calificación" PENDIENTE (Bancor / Nación / Galicia /
 //       decreditos)
 //    4. CONSULTA AUTOMÁTICA: mientras las sesiones de los bancos estén abiertas en
@@ -323,6 +324,9 @@ function registrarKommo(app, pool, buscarEnStock) {
     return [...exactos, ...aprox, ...sinAnio]
   }
 
+  // Por defecto el pedido de Kommo NO crea un lead en Ruthina (Match → Clientes cargados): el lead ya vive en Kommo.
+  const crearLeads = () => /^(si|sí|true|1|yes)$/i.test(String(process.env.KOMMO_CREAR_LEADS || ''))
+
   async function guardarCliente(p) {
     const ex = await pool.query(
       `SELECT id FROM clientes_busqueda WHERE dni=$1 AND estado='Buscando' ORDER BY created_at DESC LIMIT 1`, [p.cuil])
@@ -367,7 +371,7 @@ function registrarKommo(app, pool, buscarEnStock) {
     const cuilValido = cuil.length === 11 && validarCuil(cuil)
 
     const autos = modelo ? await buscarAutos(modelo, anio) : []
-    const clienteId = await guardarCliente(pedido)
+    const clienteId = crearLeads() ? await guardarCliente(pedido) : null
 
     // evitar duplicados: si ya hay un pedido abierto para este CUIL, se reutiliza
     let sol = await pool.query(
@@ -380,7 +384,7 @@ function registrarKommo(app, pool, buscarEnStock) {
            lead_id=CASE WHEN $4<>'' THEN $4 ELSE lead_id END,
            nombre=CASE WHEN $5<>'' THEN $5 ELSE nombre END,
            telefono=CASE WHEN $6<>'' THEN $6 ELSE telefono END,
-           cliente_id=$7, updated_at=NOW()
+           cliente_id=COALESCE($7::integer, cliente_id), updated_at=NOW()
          WHERE id=$8 RETURNING *`,
         [modelo || sol.rows[0].auto, anio, autos.length, pedido.lead_id, pedido.nombre, pedido.telefono, clienteId, sol.rows[0].id])
     } else {
@@ -514,6 +518,48 @@ function registrarKommo(app, pool, buscarEnStock) {
   })
 
   // ── Estado de la integración (para probar desde el navegador) ──────────
+  // ── Limpieza de leads que ya creó Kommo ─────────────────────────────────
+  // Solo toca los que creó el webhook (nota "Pedido desde Kommo"); nunca un lead cargado por el bot o a mano.
+  // Se pide con la misma clave del webhook (?key=...). Lo que se borra queda guardado en clientes_borrados_kommo.
+  const FILTRO_LEADS_KOMMO = `notas LIKE 'Pedido desde Kommo%'`
+  ;(async () => {
+    await pool.query(`CREATE TABLE IF NOT EXISTS clientes_borrados_kommo (
+      id SERIAL PRIMARY KEY, cliente_id INTEGER, datos JSONB, borrado_en TIMESTAMP DEFAULT NOW())`).catch(e => console.error('clientes_borrados_kommo:', e.message))
+  })()
+  app.get('/api/kommo/leads-creados', async (req, res) => {
+    if (!claveOk(req)) return res.status(401).json({ error: 'Falta ?key=...' })
+    try {
+      const r = await pool.query(`SELECT id, nombre, telefono, dni, modelo, anio, asesor, vendedor, estado, created_at FROM clientes_busqueda WHERE ${FILTRO_LEADS_KOMMO} ORDER BY created_at DESC`)
+      res.json({ cantidad: r.rowCount, leads: r.rows, aviso: 'Para borrarlos: POST /api/kommo/leads-creados/borrar?key=... con {"todos":true} o {"ids":[1,2]}. Quedan guardados y se pueden restaurar.' })
+    } catch(e) { res.status(500).json({ error: e.message }) }
+  })
+  app.post('/api/kommo/leads-creados/borrar', express.json(), async (req, res) => {
+    if (!claveOk(req)) return res.status(401).json({ error: 'Falta ?key=...' })
+    try {
+      const b = req.body || {}
+      const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Number.isInteger) : null
+      if (!b.todos && !(ids && ids.length)) return res.status(400).json({ error: 'Mandá {"todos":true} o {"ids":[...]}' })
+      const sel = await pool.query(`SELECT id FROM clientes_busqueda WHERE ${FILTRO_LEADS_KOMMO}` + (b.todos ? '' : ' AND id = ANY($1::int[])'), b.todos ? [] : [ids])
+      const lista = sel.rows.map(x => x.id)
+      if (!lista.length) return res.json({ ok: true, borrados: 0 })
+      await pool.query(
+        `WITH del AS (DELETE FROM clientes_busqueda WHERE id = ANY($1::int[]) AND ${FILTRO_LEADS_KOMMO} RETURNING *)
+         INSERT INTO clientes_borrados_kommo (cliente_id, datos) SELECT id, to_jsonb(del) FROM del`, [lista])
+      await pool.query(`UPDATE calificaciones_kommo SET cliente_id = NULL WHERE cliente_id = ANY($1::int[])`, [lista])
+      res.json({ ok: true, borrados: lista.length })
+    } catch(e) { res.status(500).json({ error: e.message }) }
+  })
+  app.post('/api/kommo/leads-creados/restaurar', express.json(), async (req, res) => {
+    if (!claveOk(req)) return res.status(401).json({ error: 'Falta ?key=...' })
+    try {
+      const horas = Math.min(Math.max(Number(req.body && req.body.horas) || 48, 1), 24 * 90)
+      const r = await pool.query(
+        `WITH rest AS (DELETE FROM clientes_borrados_kommo WHERE borrado_en > NOW() - ($1 || ' hours')::interval RETURNING datos)
+         INSERT INTO clientes_busqueda SELECT (jsonb_populate_record(NULL::clientes_busqueda, datos)).* FROM rest ON CONFLICT (id) DO NOTHING`, [String(horas)])
+      res.json({ ok: true, restaurados: r.rowCount, horas })
+    } catch(e) { res.status(500).json({ error: e.message }) }
+  })
+
   app.get('/api/kommo/estado', async (req, res) => {
     const out = {
       webhook_key: !!process.env.KOMMO_WEBHOOK_KEY,
