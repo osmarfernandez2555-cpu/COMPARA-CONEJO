@@ -1272,7 +1272,7 @@ require('./kommo-webhook')(app, pool, buscarEnStock)
 
 // ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
 // Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
-// Variables de entorno en Railway: KOMMO_TOKEN (obligatoria, token de larga duración),
+// Variables de entorno en Railway: KOMMO_LECTURA_TOKEN (obligatoria, token de larga duración; es distinta de KOMMO_TOKEN, que usa el webhook para ESCRIBIR en Kommo),
 // KOMMO_SUBDOMAIN (opcional, por defecto admtutuautomotores), KOMMO_PANEL_PASS (opcional, por defecto tutu2026)
 const crypto = require('crypto')
 const KOMMO_SUBDOMAIN = process.env.KOMMO_SUBDOMAIN || 'admtutuautomotores'
@@ -1282,6 +1282,7 @@ const KOMMO_MODEL = process.env.KOMMO_MODEL || 'claude-sonnet-4-6'
 const KOMMO_ANTHROPIC_URL = process.env.KOMMO_ANTHROPIC_URL || 'https://api.anthropic.com/v1/messages'
 const kommoSesiones = new Map()   // token -> expira (ms)
 const kommoIntentos = new Map()   // ip -> { n, hasta }
+function kommoTokenLectura() { return process.env.KOMMO_LECTURA_TOKEN || '' }
 const KOMMO_SESION_MS = 12 * 3600 * 1000
 const KOMMO_STATUS_GANADO = 142, KOMMO_STATUS_PERDIDO = 143
 
@@ -1296,11 +1297,11 @@ function kommoFechaARG(ts) { return ts ? new Date((ts - 3 * 3600) * 1000).toISOS
 function kommoNorm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim() }
 
 async function kommoGet(pathAndQuery, intento = 0) {
-  if (!process.env.KOMMO_TOKEN) throw new Error('Falta configurar KOMMO_TOKEN en Railway (variables del servicio de Ruthina).')
-  const r = await fetch(KOMMO_BASE + pathAndQuery, { headers: { Authorization: 'Bearer ' + process.env.KOMMO_TOKEN, Accept: 'application/json' } })
+  if (!kommoTokenLectura()) throw new Error('Falta configurar KOMMO_LECTURA_TOKEN en Railway (variables del servicio de Ruthina).')
+  const r = await fetch(KOMMO_BASE + pathAndQuery, { headers: { Authorization: 'Bearer ' + kommoTokenLectura(), Accept: 'application/json' } })
   if (r.status === 204) return {}
   if (r.status === 429 && intento < 3) { await new Promise(s => setTimeout(s, 1200)); return kommoGet(pathAndQuery, intento + 1) }
-  if (r.status === 401) throw new Error('Kommo rechazó el token (401). Hay que generar uno nuevo y cargarlo en KOMMO_TOKEN.')
+  if (r.status === 401) throw new Error('Kommo rechazó el token (401). Hay que generar uno nuevo y cargarlo en KOMMO_LECTURA_TOKEN.')
   if (!r.ok) throw new Error('Kommo respondió ' + r.status + ': ' + (await r.text()).slice(0, 200))
   return r.json()
 }
@@ -1502,7 +1503,7 @@ app.post('/api/kommo/login', (req, res) => {
   kommoIntentos.delete(ip)
   const token = crypto.randomBytes(24).toString('hex')
   kommoSesiones.set(token, Date.now() + KOMMO_SESION_MS)
-  res.json({ ok: true, token, configurado: !!process.env.KOMMO_TOKEN })
+  res.json({ ok: true, token, configurado: !!kommoTokenLectura() })
 })
 app.post('/api/kommo/chat', kommoAuth, async (req, res) => {
   const apiKey = process.env.ANTHROPIC_API_KEY
