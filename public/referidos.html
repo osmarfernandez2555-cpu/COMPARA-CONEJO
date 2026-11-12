@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Club de Referidos · Tutu Automotores</title>
+<meta name="description" content="¿Conocés a alguien que quiere comprar un auto? Pasale el dato a Tutu Automotores y cobrá $100.000 si se concreta la venta. Vigente hasta el 31/12/2026.">
+<meta property="og:title" content="Club de Referidos · Tutu Automotores">
+<meta property="og:description" content="Pasanos un comprador. Si compra en Tutu, cobrás $100.000.">
+<meta name="theme-color" content="#0E1116">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,400..900;1,62..125,400..900&family=DM+Sans:opsz,wght@9..40,400..700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --asfalto:#0E1116;
+  --asfalto-2:#161B23;
+  --asfalto-3:#222935;
+  --linea:#2E3644;
+  --azul:#3686F7;
+  --azul-hover:#1959BD;
+  --azul-boton:#1F6CD9;
+  --azul-hondo:#002E6E;
+  --tinta:#F4F6FA;
+  --tinta-2:#B4BFCE;
+  --papel:#EEF1F6;
+  --papel-2:#FFFFFF;
+  --carbon:#141821;
+  --carbon-2:#4A5568;
+  --borde:#CDD5E1;
+  --ok:#1F9D63;
+  --error:#D93A3A;
+  --amarillo:#F5C542;
+  --r-sm:8px; --r-md:14px; --r-lg:22px;
+  --sombra:0 18px 40px -18px rgba(0,0,0,.55), 0 4px 10px -4px rgba(0,0,0,.25);
+  --f-display:"Archivo", "DM Sans", sans-serif;
+  --f-body:"DM Sans", system-ui, sans-serif;
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;scroll-padding-top:84px}
+input,select,textarea,.chip,legend{scroll-margin-top:96px;scroll-margin-bottom:110px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--asfalto);color:var(--tinta);font-family:var(--f-body);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+::selection{background:var(--azul);color:#fff}
+img{max-width:100%;display:block}
+a{color:inherit;text-underline-offset:.2em;text-decoration-thickness:1px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--azul);outline-offset:3px;border-radius:6px}
+html{scrollbar-color:var(--linea) var(--asfalto)}
+::-webkit-scrollbar{width:10px}::-webkit-scrollbar-track{background:var(--asfalto)}::-webkit-scrollbar-thumb{background:var(--linea);border-radius:10px;border:2px solid var(--asfalto)}
+.num{font-variant-numeric:tabular-nums}
+.wrap{width:min(1180px,100% - 40px);margin-inline:auto}
+[hidden]{display:none!important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ── barra superior ───────────────────────── */
+.top{position:sticky;top:0;z-index:30;background:rgba(14,17,22,.86);backdrop-filter:saturate(140%) blur(12px);-webkit-backdrop-filter:saturate(140%) blur(12px);border-bottom:1px solid rgba(255,255,255,.06);padding-top:var(--safe-t)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px}
+.marca{display:flex;align-items:center;gap:12px;text-decoration:none}
+.marca img{height:34px;width:auto}
+.marca .wordmark{display:none;font-family:var(--f-display);font-style:italic;font-weight:900;font-stretch:112%;font-size:26px;letter-spacing:-.02em;line-height:1}
+.marca .wordmark small{display:block;font-size:10px;font-weight:700;letter-spacing:.08em;font-stretch:100%;font-style:italic;margin-top:2px;color:var(--tinta-2)}
+.marca.sin-logo img{display:none}.marca.sin-logo .wordmark{display:block}
+.marca .club{font-size:13px;font-weight:600;color:var(--tinta-2);padding-left:12px;border-left:1px solid var(--linea);line-height:1.2}
+.top .wa{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;text-decoration:none;padding:10px 14px;border-radius:999px;border:1px solid var(--linea);min-height:44px}
+.top .wa:hover{border-color:var(--azul);color:#fff}
+.top .wa svg{width:18px;height:18px}
+@media (max-width:560px){.marca .club{display:none}.top .wa span{display:none}.top .wa{padding:10px}}
+
+/* ── hero ─────────────────────────────────── */
+.hero{position:relative;overflow:hidden;padding:clamp(48px,8vw,104px) 0 clamp(64px,9vw,120px);isolation:isolate}
+.hero::before{content:"";position:absolute;inset:0;z-index:-2;
+  background:
+    radial-gradient(1200px 520px at 78% 18%, rgba(54,134,247,.28), transparent 60%),
+    radial-gradient(800px 500px at 10% 110%, rgba(0,46,110,.55), transparent 60%),
+    var(--asfalto)}
+.hero::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:6px;z-index:-1;transform:translateX(-50%);
+  background:repeating-linear-gradient(to bottom, rgba(245,197,66,.0) 0 26px, rgba(245,197,66,.16) 26px 70px);
+  -webkit-mask:linear-gradient(to bottom, transparent, #000 30%, #000);mask:linear-gradient(to bottom, transparent, #000 30%, #000)}
+.hero .wrap{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(32px,5vw,72px);align-items:center}
+.hero h1{font-family:var(--f-display);font-weight:900;font-style:italic;font-stretch:108%;font-size:clamp(44px,7.4vw,92px);line-height:.94;letter-spacing:-.035em;margin:0 0 24px;text-wrap:balance}
+.hero h1 .plata{color:var(--azul);white-space:nowrap}
+.hero p.lead{font-size:clamp(18px,2vw,21px);color:var(--tinta-2);max-width:34ch;margin:0 0 32px}
+.hero p.lead strong{color:var(--tinta);font-weight:600}
+.acciones{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.btn{appearance:none;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 24px;border-radius:999px;font-weight:700;font-size:16px;text-decoration:none;transition:background-color .2s var(--ease-out),transform .2s var(--ease-out),box-shadow .2s var(--ease-out),color .2s}
+.btn svg{width:20px;height:20px;flex:none}
+.btn-pri{background:var(--azul-boton);color:#fff;box-shadow:0 10px 22px -10px rgba(0,0,0,.55)}
+.btn-pri:hover{background:var(--azul-hover);transform:translateY(-1px)}
+.btn-pri:active{transform:translateY(0)}
+.btn-pri[disabled]{opacity:.55;cursor:not-allowed;transform:none}
+.btn-sec{background:transparent;color:var(--tinta);border:1px solid var(--linea)}
+.btn-sec:hover{border-color:var(--tinta-2)}
+.hechos{display:flex;flex-wrap:wrap;gap:8px 22px;margin:36px 0 0;padding:0;list-style:none;font-size:14px;color:var(--tinta-2)}
+.hechos li{display:flex;align-items:center;gap:8px}
+.hechos svg{width:18px;height:18px;color:var(--azul);flex:none}
+
+/* ── llavero (firma) ──────────────────────── */
+.colgante{position:relative;display:flex;justify-content:center;padding-top:40px}
+.aro{position:absolute;top:0;left:50%;width:74px;height:74px;margin-left:-37px;border-radius:50%;border:7px solid #C9D2DE;border-bottom-color:#8C97A8;border-right-color:#A9B4C3;box-shadow:inset 0 0 0 2px rgba(0,0,0,.2), 0 6px 14px rgba(0,0,0,.4);z-index:2}
+.llavero{position:relative;width:min(340px,100%);transform-origin:50% -20px;animation:hamaca 2.6s var(--ease-out) .25s both}
+@keyframes hamaca{0%{transform:rotate(-14deg) translateY(-14px);opacity:0}35%{opacity:1}55%{transform:rotate(5deg)}75%{transform:rotate(-2deg)}100%{transform:rotate(0)}}
+@media (prefers-reduced-motion:reduce){.llavero{animation:none}}
+.tag{position:relative;background:linear-gradient(160deg,#1D61C9 0%, #174FAA 50%, #0F3F8C 100%);color:#fff;border-radius:28px 28px 22px 22px;padding:58px 26px 24px;box-shadow:var(--sombra), inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 0 rgba(0,0,0,.18)}
+.tag::before{content:"";position:absolute;top:18px;left:50%;width:30px;height:30px;margin-left:-15px;border-radius:50%;background:var(--asfalto);box-shadow:inset 0 3px 6px rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.35)}
+.tag .tag-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:2px dashed rgba(255,255,255,.35);padding-bottom:12px;margin-bottom:14px}
+.tag .tag-head b{font-family:var(--f-display);font-style:italic;font-weight:900;font-stretch:112%;font-size:22px;letter-spacing:-.01em}
+.tag .tag-head span{font-size:12px;font-weight:600;color:#E3EDFF}
+.tag dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:14px}
+.tag dt{color:#EEF4FF;font-weight:500}
+.tag dd{margin:0;font-weight:700;text-align:right;overflow-wrap:anywhere}
+.tag dd.vacio{color:#DCE8FC;font-weight:500}
+.tag .premio{margin-top:18px;background:rgba(0,22,56,.5);border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tag .premio small{font-size:12px;color:#E3EDFF;line-height:1.3}
+.tag .premio strong{font-family:var(--f-display);font-weight:900;font-style:italic;font-size:28px;letter-spacing:-.02em;white-space:nowrap}
+
+/* ── cómo funciona ─────────────────────────── */
+.ruta{background:var(--asfalto-2);border-top:1px solid rgba(255,255,255,.05);border-bottom:1px solid rgba(255,255,255,.05);padding:clamp(64px,8vw,104px) 0}
+.ruta h2,.form-sec h2,.bases h2{font-family:var(--f-display);font-style:italic;font-weight:900;font-stretch:104%;font-size:clamp(32px,4.4vw,52px);line-height:1;letter-spacing:-.03em;margin:0 0 16px;text-wrap:balance}
+.ruta .intro{color:var(--tinta-2);max-width:52ch;margin:0 0 48px}
+.tramos{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:28px;list-style:none;margin:0;padding:0}
+.tramos::before{content:"";position:absolute;left:24px;right:24px;top:23px;height:4px;background:repeating-linear-gradient(to right,var(--amarillo) 0 22px,transparent 22px 40px);opacity:.55}
+.tramo{position:relative}
+.tramo .hito{position:relative;width:50px;height:50px;border-radius:50%;background:var(--asfalto);border:3px solid var(--azul);display:grid;place-items:center;margin-bottom:22px;color:var(--azul)}
+.tramo .hito svg{width:22px;height:22px}
+.tramo:last-child .hito{background:var(--azul);color:#fff;border-color:var(--azul)}
+.tramo h3{font-family:var(--f-display);font-weight:800;font-stretch:100%;font-size:22px;letter-spacing:-.015em;margin:0 0 8px}
+.tramo p{margin:0;color:var(--tinta-2);max-width:32ch}
+@media (max-width:820px){
+  .tramos{grid-template-columns:1fr;gap:34px}
+  .tramos::before{left:23px;right:auto;top:24px;bottom:24px;width:4px;height:auto;background:repeating-linear-gradient(to bottom,var(--amarillo) 0 22px,transparent 22px 40px)}
+  .tramo{padding-left:74px}
+  .tramo .hito{position:absolute;left:0;top:-4px;margin:0}
+}
+
+/* ── formulario ────────────────────────────── */
+.form-sec{background:var(--papel);color:var(--carbon);padding:clamp(56px,8vw,104px) 0 calc(clamp(56px,8vw,104px) + var(--safe-b))}
+.form-sec ::selection{background:var(--azul);color:#fff}
+.form-sec .intro{color:var(--carbon-2);max-width:56ch;margin:0 0 40px}
+.form-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:clamp(28px,4vw,56px);align-items:start}
+.panel{background:var(--papel-2);border-radius:var(--r-lg);box-shadow:0 1px 0 rgba(20,24,33,.04), 0 20px 50px -30px rgba(0,30,80,.35);padding:clamp(22px,3.4vw,40px)}
+.pasos{display:flex;gap:6px;margin:0 0 28px;padding:0;list-style:none;counter-reset:p}
+.pasos li{flex:1;min-width:0}
+.pasos button{width:100%;appearance:none;background:none;border:0;padding:0;cursor:pointer;text-align:left;color:var(--carbon-2);font-size:13px;font-weight:600}
+.pasos button:disabled{cursor:default}
+.pasos .barra{display:block;height:5px;border-radius:5px;background:#DCE2EB;margin-bottom:8px;transition:background-color .3s var(--ease-out)}
+.pasos li.hecho .barra{background:var(--azul-hondo)}
+.pasos li.activo .barra{background:var(--azul)}
+.pasos li.activo button{color:var(--carbon)}
+.pasos .txt{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:520px){.pasos li:not(.activo) .txt{visibility:hidden}}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+.paso{display:none}
+.paso.activo{display:block;animation:entra .45s var(--ease-out)}
+@keyframes entra{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.paso.activo{animation:none}}
+.paso legend{font-family:var(--f-display);font-weight:800;font-size:clamp(24px,3vw,30px);letter-spacing:-.02em;line-height:1.1;margin:0 0 6px;padding:0}
+.paso .ayuda-paso{color:var(--carbon-2);margin:0 0 26px;font-size:15px}
+.campos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 16px}
+.campo{display:flex;flex-direction:column;gap:6px;min-width:0}
+.campo.ancho{grid-column:1/-1}
+@media (max-width:560px){.campos{grid-template-columns:1fr}}
+label,.etq{font-size:14px;font-weight:600;color:var(--carbon)}
+.opc{font-weight:500;color:var(--carbon-2)}
+input[type=text],input[type=tel],input[type=number],input[type=email],select,textarea{width:100%;min-height:50px;padding:12px 14px;border-radius:var(--r-sm);border:1.5px solid var(--borde);background:#fff;color:var(--carbon);font-size:16px;caret-color:var(--azul);transition:border-color .15s,box-shadow .15s}
+textarea{min-height:88px;resize:vertical}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%234A5568' stroke-width='2'%3E%3Cpath d='m1 1 5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:38px}
+input::placeholder,textarea::placeholder{color:#6B778A}
+input:hover,select:hover,textarea:hover{border-color:#AEB9C9}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 4px rgba(54,134,247,.18)}
+.campo.mal input,.campo.mal select,.campo.mal textarea{border-color:var(--error)}
+.campo.mal input:focus{box-shadow:0 0 0 4px rgba(217,58,58,.16)}
+.err{display:none;font-size:13px;color:#B42323;font-weight:600}
+.campo.mal .err{display:block}
+.pista{font-size:13px;color:var(--carbon-2)}
+.precio{display:flex;gap:8px}
+.precio select{width:96px;flex:none}
+.opciones{display:flex;flex-wrap:wrap;gap:8px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;inset:0;cursor:pointer;margin:0}
+.chip span{display:inline-flex;align-items:center;min-height:46px;padding:0 18px;border-radius:999px;border:1.5px solid var(--borde);background:#fff;font-weight:600;font-size:15px;transition:background-color .15s,border-color .15s,color .15s;cursor:pointer}
+.chip input:hover+span{border-color:#AEB9C9}
+.chip input:checked+span{background:var(--azul-hondo);border-color:var(--azul-hondo);color:#fff}
+.chip input:focus-visible+span{outline:3px solid var(--azul);outline-offset:2px}
+.campo.mal .opciones .chip span{border-color:var(--error)}
+.sub{grid-column:1/-1;display:none;background:#F4F7FB;border:1px solid #DFE6EF;border-radius:var(--r-md);padding:18px}
+.sub.ver{display:grid;gap:16px;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:560px){.sub.ver{grid-template-columns:1fr}}
+.sub .titulo{grid-column:1/-1;font-weight:700;font-size:15px;margin:0}
+.garante{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding-top:14px;border-top:1px dashed #CBD5E3}
+.garante:first-of-type{border-top:0;padding-top:0}
+.garante .g-head{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:14px}
+@media (max-width:640px){.garante{grid-template-columns:1fr}}
+.link-btn{appearance:none;background:none;border:0;padding:8px 2px;color:#1C5FC4;font-weight:700;cursor:pointer;font-size:14px;min-height:44px;display:inline-flex;align-items:center;gap:6px}
+.link-btn:hover{text-decoration:underline}
+.link-btn svg{width:18px;height:18px}
+.check{display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.45;color:var(--carbon);cursor:pointer}
+.check input{width:22px;height:22px;flex:none;margin:1px 0 0;accent-color:var(--azul-hondo);cursor:pointer}
+.campo.mal .check{color:#B42323}
+.nav-pasos{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:32px;padding-top:24px;border-top:1px solid #E3E8F0}
+.nav-pasos .btn-sec{color:var(--carbon);border-color:var(--borde)}
+.nav-pasos .btn-sec:hover{border-color:var(--carbon-2)}
+.nav-pasos .btn-pri{margin-left:auto}
+.revisar{display:grid;gap:14px}
+.bloque-rev{border:1px solid #E1E7EF;border-radius:var(--r-md);padding:16px 18px}
+.bloque-rev header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.bloque-rev h4{margin:0;font-size:15px}
+.bloque-rev dl{margin:0;display:grid;grid-template-columns:minmax(110px,auto) 1fr;gap:6px 16px;font-size:15px}
+.bloque-rev dt{color:var(--carbon-2)}
+.bloque-rev dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.aviso{display:none;margin-top:18px;padding:14px 16px;border-radius:var(--r-sm);font-size:15px;font-weight:600}
+.aviso.ver{display:block}
+.aviso.error{background:#FDECEC;color:#8E1C1C}
+.aviso.demo{background:#FFF6DA;color:#6B4E00;font-weight:500;margin:0 0 22px}
+.lateral{position:sticky;top:88px}
+.lateral .llavero{animation:none;width:100%}
+.lateral .nota{font-size:14px;color:var(--carbon-2);margin:18px 4px 0}
+@media (max-width:980px){.form-grid{grid-template-columns:minmax(0,1fr)}.lateral{display:none}}
+.spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:gira .8s linear infinite;display:none}
+.enviando .spinner{display:inline-block}
+.enviando .flecha{display:none}
+@keyframes gira{to{transform:rotate(360deg)}}
+
+/* listo */
+.listo{display:none;text-align:left}
+.listo.ver{display:block;animation:entra .5s var(--ease-out)}
+.listo .sello{width:64px;height:64px;border-radius:50%;background:var(--ok);display:grid;place-items:center;color:#fff;margin-bottom:22px}
+.listo .sello svg{width:32px;height:32px}
+.listo h3{font-family:var(--f-display);font-weight:900;font-style:italic;font-size:clamp(28px,4vw,40px);letter-spacing:-.025em;line-height:1.05;margin:0 0 12px}
+.listo p{color:var(--carbon-2);max-width:48ch;margin:0 0 10px}
+.listo .codigo{display:inline-block;margin:6px 0 26px;font-weight:700;background:#EEF3FB;color:var(--azul-hondo);border-radius:8px;padding:6px 12px}
+.listo .acciones .btn-sec{color:var(--carbon);border-color:var(--borde)}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+
+/* ── bases y preguntas ────────────────────── */
+.bases{background:var(--asfalto);padding:clamp(64px,8vw,104px) 0}
+.bases .cols{display:grid;grid-template-columns:.8fr 1.2fr;gap:clamp(28px,5vw,80px)}
+@media (max-width:860px){.bases .cols{grid-template-columns:1fr}}
+.bases .intro{color:var(--tinta-2);max-width:40ch}
+details{border-bottom:1px solid var(--linea)}
+details:first-of-type{border-top:1px solid var(--linea)}
+summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 2px;font-weight:600;font-size:18px;min-height:44px}
+summary::-webkit-details-marker{display:none}
+summary svg{width:20px;height:20px;flex:none;color:var(--tinta-2);transition:transform .25s var(--ease-out)}
+details[open] summary svg{transform:rotate(45deg);color:var(--azul)}
+details .cuerpo{padding:0 2px 22px;color:var(--tinta-2);max-width:62ch}
+details .cuerpo p{margin:0 0 10px}
+details .cuerpo ul{margin:0;padding-left:20px}
+details .cuerpo li{margin-bottom:6px}
+
+/* ── pie ───────────────────────────────────── */
+.pie{background:#090B0F;color:var(--tinta-2);font-size:14px;padding:40px 0 calc(40px + var(--safe-b));border-top:1px solid rgba(255,255,255,.05)}
+.pie .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px 32px}
+.pie a{color:var(--tinta)}
+
+/* responsive hero */
+@media (max-width:900px){
+  .hero .wrap{grid-template-columns:minmax(0,1fr)}
+  .hero::after{display:none}
+  .colgante{order:2}
+}
+/* botón flotante móvil */
+.cta-movil{position:fixed;left:16px;right:16px;bottom:calc(14px + var(--safe-b));z-index:40;display:none}
+.cta-movil .btn{width:100%}
+@media (max-width:720px){.cta-movil.ver{display:block}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="marca" href="https://tutuautomotores.com" aria-label="Tutu Automotores, ir al sitio">
+      <img src="https://tutuautomotores.com/wp-content/uploads/2025/08/logo.svg" alt="Tutu Automotores" width="107" height="34" onerror="this.parentNode.classList.add('sin-logo')">
+      <span class="wordmark" aria-hidden="true">TUTU<small>AUTOMOTORES</small></span>
+      <span class="club">Club de<br>Referidos</span>
+    </a>
+    <a class="wa" id="waTop" href="https://wa.me/5493515171111?text=Hola!%20Tengo%20una%20consulta%20sobre%20el%20Club%20de%20Referidos" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.91a9.85 9.85 0 0 0-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm0 18.15h-.01a8.23 8.23 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.23 8.25-8.23a8.2 8.2 0 0 1 5.83 2.42 8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.23-8.23 8.23Zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.16.25-.64.81-.78.97-.15.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23a7.44 7.44 0 0 1-1.38-1.72c-.14-.25-.01-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.17.04-.31-.02-.43-.06-.13-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.42h-.48a.92.92 0 0 0-.66.31c-.23.25-.87.85-.87 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.24 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.15-1.18-.06-.1-.23-.16-.48-.29Z"/></svg>
+      <span>351 517-1111</span>
+    </a>
+  </div>
+</header>
+
+<main>
+  <section class="hero" aria-labelledby="h-hero">
+    <div class="wrap">
+      <div>
+        <h1 id="h-hero">Pasanos un comprador. Cobrá <span class="plata num">$100.000</span>.</h1>
+        <p class="lead">¿Conocés a alguien que está buscando auto? Cargá su dato. <strong>Si compra en Tutu, te pagamos $100.000</strong> cuando se confirma la venta.</p>
+        <div class="acciones">
+          <a class="btn btn-pri" href="#referir">Cargar un referido
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a class="btn btn-sec" href="#como">Cómo funciona</a>
+        </div>
+        <ul class="hechos">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Hasta 5 beneficios por persona</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Vos pasás el dato, nosotros lo atendemos</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Vigente hasta el 31/12/2026</li>
+        </ul>
+      </div>
+      <div class="colgante" aria-hidden="true">
+        <div class="aro"></div>
+        <div class="llavero">
+          <div class="tag">
+            <div class="tag-head"><b>REFERIDO</b><span>Tutu Automotores</span></div>
+            <dl>
+              <dt>Comprador</dt><dd>Martín G.</dd>
+              <dt>Busca</dt><dd>Peugeot 208 · 2022</dd>
+              <dt>Presupuesto</dt><dd class="num">$ 22.000.000</dd>
+              <dt>Entrega usado</dt><dd>Sí, Gol 2014</dd>
+              <dt>Financia</dt><dd>Sí</dd>
+            </dl>
+            <div class="premio"><small>Se paga al<br>confirmar la venta</small><strong class="num">$100.000</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ruta" id="como" aria-labelledby="h-como">
+    <div class="wrap">
+      <h2 id="h-como">Tres tramos y cobrás.</h2>
+      <p class="intro">No tenés que vender nada. Nos pasás el contacto y del resto nos encargamos nosotros.</p>
+      <ol class="tramos">
+        <li class="tramo">
+          <div class="hito"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg></div>
+          <h3>Cargás el dato</h3>
+          <p>Desde el celular, en dos minutos: quién compra, qué auto busca y con cuánta plata cuenta.</p>
+        </li>
+        <li class="tramo">
+          <div class="hito"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z"/></svg></div>
+          <h3>Lo atendemos nosotros</h3>
+          <p>Un asesor lo llama, le busca el auto, le toma el usado y, si quiere financiar, le precalificamos el crédito.</p>
+        </li>
+        <li class="tramo">
+          <div class="hito"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></div>
+          <h3>Se confirma la venta, cobrás</h3>
+          <p>Cuando el comprador firma y paga la seña o el anticipo, te transferimos <strong class="num">$100.000</strong> dentro de los 30 días.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="form-sec" id="referir" aria-labelledby="h-form">
+    <div class="wrap">
+      <h2 id="h-form">Cargá tu referido</h2>
+      <p class="intro">Son cinco pasos cortos. Lo que dice “opcional” podés dejarlo vacío: lo averiguamos cuando lo llamemos.</p>
+
+      <div class="form-grid">
+        <div class="panel">
+          <div class="aviso demo" id="avisoDemo" hidden>Vista previa: este formulario no envía datos. En el link publicado en Railway, cada referido llega a Ruthina.</div>
+
+          <form id="form" novalidate>
+            <ol class="pasos" id="pasos" aria-label="Pasos del formulario"></ol>
+
+            <!-- Paso 1: quien refiere -->
+            <fieldset class="paso activo" data-paso="0" data-nombre="Vos">
+              <legend>Primero, tus datos</legend>
+              <p class="ayuda-paso">Para saber a quién pagarle y avisarte cómo avanza. Tenés que ser mayor de 18 años.</p>
+              <div class="campos">
+                <div class="campo"><label for="ref_nombre">Tu nombre y apellido</label>
+                  <input id="ref_nombre" name="ref_nombre" type="text" autocomplete="name" required maxlength="80">
+                  <span class="err">Escribí tu nombre.</span></div>
+                <div class="campo"><label for="ref_tel">Tu WhatsApp</label>
+                  <input id="ref_tel" name="ref_tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="351 555-1234" required maxlength="20">
+                  <span class="err">Poné un número con característica, ej. 351 555-1234.</span></div>
+                <div class="campo"><label for="ref_dni">Tu DNI</label>
+                  <input id="ref_dni" name="ref_dni" type="text" inputmode="numeric" required maxlength="10" autocomplete="off" placeholder="30123456">
+                  <span class="err">Poné tu DNI, sin puntos (7 u 8 números).</span></div>
+                <div class="campo"><label for="ref_email">Tu correo</label>
+                  <input id="ref_email" name="ref_email" type="email" inputmode="email" autocomplete="email" required maxlength="100" placeholder="nombre@gmail.com">
+                  <span class="err">Revisá el correo, ej. nombre@gmail.com.</span></div>
+                <div class="campo ancho"><label for="ref_alias">Alias, CBU o CVU para cobrar <span class="opc">(opcional)</span></label>
+                  <input id="ref_alias" name="ref_alias" type="text" maxlength="40" autocomplete="off" placeholder="mi.alias.mp">
+                  <span class="pista">Si no lo ponés ahora, te lo pedimos cuando haya que pagarte.</span></div>
+              </div>
+            </fieldset>
+
+            <!-- Paso 2: comprador -->
+            <fieldset class="paso" data-paso="1" data-nombre="Comprador">
+              <legend>¿Quién quiere comprar?</legend>
+              <p class="ayuda-paso">Lo contactamos nosotros. Avisale antes que lo vamos a llamar de parte tuya.</p>
+              <div class="campos">
+                <div class="campo"><label for="comp_nombre">Nombre y apellido</label>
+                  <input id="comp_nombre" name="comp_nombre" type="text" required maxlength="80" autocomplete="off">
+                  <span class="err">Escribí el nombre del comprador.</span></div>
+                <div class="campo"><label for="comp_tel">Teléfono o WhatsApp</label>
+                  <input id="comp_tel" name="comp_tel" type="tel" inputmode="tel" placeholder="351 555-1234" required maxlength="20" autocomplete="off">
+                  <span class="err">Poné un número con característica.</span></div>
+                <div class="campo"><label for="comp_email">Correo</label>
+                  <input id="comp_email" name="comp_email" type="email" inputmode="email" required maxlength="100" autocomplete="off" placeholder="nombre@gmail.com">
+                  <span class="err">Revisá el correo del comprador.</span></div>
+                <div class="campo"><label for="comp_localidad">Ciudad o zona</label>
+                  <input id="comp_localidad" name="comp_localidad" type="text" required maxlength="60" autocomplete="off" placeholder="Córdoba capital, Villa María…">
+                  <span class="err">Contanos en qué ciudad o zona vive.</span></div>
+                <div class="campo ancho">
+                  <label class="check"><input type="checkbox" id="comp_aviso" name="comp_aviso" required>
+                    <span>Tengo su autorización para pasar sus datos y sabe que Tutu Automotores lo va a contactar.</span></label>
+                  <span class="err">Necesitamos su autorización antes de que nos pases sus datos.</span></div>
+              </div>
+            </fieldset>
+
+            <!-- Paso 3: auto -->
+            <fieldset class="paso" data-paso="2" data-nombre="Auto">
+              <legend>¿Qué auto busca?</legend>
+              <p class="ayuda-paso">Aunque sea una idea aproximada nos sirve.</p>
+              <div class="campos">
+                <div class="campo"><label for="marca">Marca</label>
+                  <input id="marca" name="marca" type="text" list="marcas" required maxlength="40" autocomplete="off" placeholder="Ej. Peugeot">
+                  <datalist id="marcas"></datalist>
+                  <span class="err">Contanos la marca, o poné “No sabe”.</span></div>
+                <div class="campo"><label for="modelo">Modelo</label>
+                  <input id="modelo" name="modelo" type="text" maxlength="60" autocomplete="off" placeholder="Ej. 208 Allure"></div>
+                <div class="campo"><label for="anio">Año <span class="opc">(desde)</span></label>
+                  <input id="anio" name="anio" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="2020 o 0 km">
+                  <span class="err">Poné un año entre 1990 y el actual, o “0 km”.</span></div>
+                <div class="campo"><label for="presupuesto">Presupuesto</label>
+                  <div class="precio">
+                    <select id="moneda" name="moneda" aria-label="Moneda"><option value="ARS">$</option><option value="USD">US$</option></select>
+                    <input id="presupuesto" name="presupuesto" type="text" inputmode="numeric" class="num" maxlength="16" placeholder="20.000.000" autocomplete="off">
+                  </div>
+                  <span class="err">Poné un monto en números.</span></div>
+                <div class="campo ancho"><span class="etq" id="lbl-usado">¿Entrega un auto como parte de pago?</span>
+                  <div class="opciones" role="radiogroup" aria-labelledby="lbl-usado">
+                    <label class="chip"><input type="radio" name="entrega" value="si" required><span>Sí</span></label>
+                    <label class="chip"><input type="radio" name="entrega" value="no"><span>No</span></label>
+                    <label class="chip"><input type="radio" name="entrega" value="nose"><span>No sé</span></label>
+                  </div>
+                  <span class="err">Elegí una opción.</span></div>
+                <div class="sub" id="subUsado">
+                  <p class="titulo">El auto que entrega</p>
+                  <div class="campo"><label for="usado_marca_modelo">Marca y modelo</label>
+                    <input id="usado_marca_modelo" name="usado_marca_modelo" type="text" maxlength="60" autocomplete="off" placeholder="Ej. VW Gol Trend"></div>
+                  <div class="campo"><label for="usado_anio">Año</label>
+                    <input id="usado_anio" name="usado_anio" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="2014"></div>
+                  <div class="campo"><label for="usado_km">Kilómetros <span class="opc">(aprox.)</span></label>
+                    <input id="usado_km" name="usado_km" type="text" inputmode="numeric" class="num" maxlength="9" autocomplete="off" placeholder="120.000"></div>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Paso 4: financiación -->
+            <fieldset class="paso" data-paso="3" data-nombre="Financiación">
+              <legend>¿Quiere financiar?</legend>
+              <p class="ayuda-paso">Con el DNI podemos precalificarlo en los bancos antes de llamarlo.</p>
+              <div class="campos">
+                <div class="campo ancho"><span class="etq" id="lbl-fin">Financiación</span>
+                  <div class="opciones" role="radiogroup" aria-labelledby="lbl-fin">
+                    <label class="chip"><input type="radio" name="financia" value="si" required><span>Sí, quiere financiar</span></label>
+                    <label class="chip"><input type="radio" name="financia" value="no"><span>No, paga contado</span></label>
+                    <label class="chip"><input type="radio" name="financia" value="nose"><span>No sé</span></label>
+                  </div>
+                  <span class="err">Elegí una opción.</span></div>
+                <div class="sub" id="subFin">
+                  <div class="campo ancho"><label for="comp_dni">DNI o CUIL del comprador <span class="opc">(para precalificar)</span></label>
+                    <input id="comp_dni" name="comp_dni" type="text" inputmode="numeric" maxlength="13" autocomplete="off" placeholder="30123456">
+                    <span class="err">Revisá el número: el DNI tiene 7 u 8 dígitos y el CUIL 11.</span>
+                    <span class="pista">Solo lo usamos para consultar el crédito en los bancos.</span></div>
+                  <div class="campo ancho"><span class="etq">Posibles garantes <span class="opc">(opcional)</span></span></div>
+                  <div id="garantes" style="display:contents"></div>
+                  <div class="campo ancho"><button type="button" class="link-btn" id="agregarGarante">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Agregar garante</button></div>
+                </div>
+                <div class="campo ancho"><label for="comentarios">Algo más que tengamos que saber <span class="opc">(opcional)</span></label>
+                  <textarea id="comentarios" name="comentarios" maxlength="600" placeholder="Ej. lo necesita para trabajar, prefiere que lo llamen a la tarde…"></textarea>
+                  <span class="pista">No pongas datos de salud ni otra información personal que no haga falta para la compra.</span></div>
+              </div>
+            </fieldset>
+
+            <!-- Paso 5: revisar -->
+            <fieldset class="paso" data-paso="4" data-nombre="Revisar">
+              <legend>Revisá y enviá</legend>
+              <p class="ayuda-paso">Tocá “Cambiar” si querés corregir algo.</p>
+              <div class="revisar" id="revisar"></div>
+              <div class="campo" style="margin-top:20px">
+                <label class="check"><input type="checkbox" id="acepto" name="acepto" required>
+                  <span>Soy mayor de 18 años y acepto los <a href="/referidos/bases" target="_blank" rel="noopener">Términos y Condiciones de la campaña</a>, y que Tutu Automotores trate estos datos según la Ley 25.326 de Protección de Datos Personales.</span></label>
+                <span class="err">Tenés que aceptar los Términos y Condiciones para enviar.</span></div>
+            </fieldset>
+
+            <div class="hp" aria-hidden="true"><label for="empresa">Empresa</label><input id="empresa" name="empresa" type="text" tabindex="-1" autocomplete="off"></div>
+
+            <div class="aviso error" id="avisoError" role="alert"></div>
+
+            <div class="nav-pasos" id="navPasos">
+              <button type="button" class="btn btn-sec" id="atras">Atrás</button>
+              <button type="submit" class="btn btn-pri" id="siguiente">
+                <span id="txtSig">Siguiente</span>
+                <svg class="flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                <span class="spinner" aria-hidden="true"></span>
+              </button>
+            </div>
+          </form>
+
+          <div class="listo" id="listo" role="status" aria-live="polite">
+            <div class="sello"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div>
+            <h3 id="listoTitulo">Listo, ya está cargado.</h3>
+            <p id="listoTexto">Un asesor de Tutu se va a comunicar con tu referido. Si se confirma la venta, te escribimos para pedirte los datos y pagarte los $100.000.</p>
+            <span class="codigo num" id="listoCodigo"></span>
+            <div class="acciones">
+              <button type="button" class="btn btn-pri" id="otro">Cargar otro referido</button>
+              <a class="btn btn-sec" id="compartir" href="#" rel="noopener">Compartir el club por WhatsApp</a>
+            </div>
+          </div>
+        </div>
+
+        <aside class="lateral" aria-label="Resumen del referido">
+          <div class="llavero">
+            <div class="tag">
+              <div class="tag-head"><b>REFERIDO</b><span id="t_ref">de —</span></div>
+              <dl>
+                <dt>Comprador</dt><dd id="t_comp" class="vacio">Sin cargar</dd>
+                <dt>Busca</dt><dd id="t_auto" class="vacio">Sin cargar</dd>
+                <dt>Presupuesto</dt><dd id="t_pres" class="vacio num">Sin cargar</dd>
+                <dt>Entrega usado</dt><dd id="t_usado" class="vacio">Sin cargar</dd>
+                <dt>Financia</dt><dd id="t_fin" class="vacio">Sin cargar</dd>
+              </dl>
+              <div class="premio"><small>Se paga al<br>confirmar la venta</small><strong class="num">$100.000</strong></div>
+            </div>
+          </div>
+          <p class="nota">Tus datos quedan guardados en este celular mientras completás el formulario.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="bases" id="bases" aria-labelledby="h-bases">
+    <div class="wrap cols">
+      <div>
+        <h2 id="h-bases">Bases y preguntas</h2>
+        <p class="intro">Esto es un resumen. Lo que vale son los <a href="/referidos/bases">Términos y Condiciones completos</a>. Consultas al WhatsApp <a href="https://wa.me/5493515171111" rel="noopener">351 517-1111</a>.</p>
+      </div>
+      <div>
+        <details id="bases-pago">
+          <summary>¿Cuándo y cómo cobro?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+          <div class="cuerpo"><p>Cobrás $100.000 por cada referido que compra un auto 0 km o usado en Tutu. La venta cuenta cuando está firmada (reserva, boleto o contrato) y el comprador pagó la seña o el anticipo. Desde que se confirma, te transferimos dentro de los 30 días a una cuenta a tu nombre (CBU o CVU).</p></div>
+        </details>
+        <details>
+          <summary>¿Cuántos referidos puedo cargar?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+          <div class="cuerpo"><p>Todos los que quieras. Cobrás hasta 5 beneficios por persona durante la campaña ($500.000 en total). La campaña tiene un cupo de 10 beneficios: si se completa antes, termina y lo avisamos por nuestros canales.</p></div>
+        </details>
+        <details>
+          <summary>¿Hasta cuándo puede comprar mi referido?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+          <div class="cuerpo"><p>La campaña recibe referidos del 12/11/2026 al 31/12/2026. Cada referido tiene 60 días desde que lo cargás para concretar la compra.</p></div>
+        </details>
+        <details>
+          <summary>¿Qué pasa si dos personas cargan al mismo comprador?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+          <div class="cuerpo"><p>Vale la primera carga válida. Tampoco cuenta si el comprador ya estaba en una compra con Tutu o hablando con un vendedor en los 30 días anteriores a que lo cargaras.</p></div>
+        </details>
+        <details>
+          <summary>¿Quién puede participar?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+          <div class="cuerpo"><p>Cualquier persona mayor de 18 años. No pueden participar empleados, vendedores ni socios de Tutu, ni sus familiares. No podés referirte a vos mismo ni a tu pareja o familiares directos.</p></div>
+        </details>
+        <details>
+          <summary>¿Qué hacen con los datos?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
+          <div class="cuerpo"><p>Los usamos solo para la campaña: contactar al comprador, validar la referencia y, si quiere financiar, consultar su crédito. Para pedir que los corrijamos o borremos, escribinos a afernandez@tutuautomotores.com.</p></div>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="pie">
+  <div class="wrap">
+    <span>Tutu Automotores · Polo 52, Autopista Córdoba–Rosario, Córdoba</span>
+    <span>WhatsApp <a href="https://wa.me/5493515171111" rel="noopener">351 517-1111</a> · <a href="https://tutuautomotores.com">tutuautomotores.com</a></span>
+  </div>
+</footer>
+
+<div class="cta-movil" id="ctaMovil"><a class="btn btn-pri" href="#referir">Cargar un referido</a></div>
+
+<script>
+(function(){
+  'use strict';
+  // ── Configuración ─────────────────────────────────────────────
+  var DEMO = false; // true solo en la vista previa (no envía)
+  var RUTHINA = 'https://compara-conejo-production.up.railway.app';
+  var host = location.hostname;
+  // Servida desde Ruthina (Railway) o en local → mismo servidor. Desde otro sitio (ej. tutuautomotores.com) → Ruthina.
+  var API = (host.indexOf('compara-conejo') !== -1 || host === 'localhost' || host === '127.0.0.1') ? '' : RUTHINA;
+  var LINK_PUBLICO = RUTHINA + '/referidos';
+  var INICIO = new Date('2026-11-12T00:00:00-03:00');
+  var FIN = new Date('2026-12-31T23:59:59-03:00'); // Plazo de Vigencia (cláusula SEGUNDA)
+  var GUARDADO = 'tutu_referido_borrador_v1';
+  var YO = 'tutu_referidor_v1';
+
+  var $ = function(s, c){ return (c||document).querySelector(s); };
+  var $$ = function(s, c){ return Array.prototype.slice.call((c||document).querySelectorAll(s)); };
+
+  var marcas = ['No sabe','Peugeot','Citroën','Fiat','Renault','Volkswagen','Toyota','Ford','Chevrolet','Nissan','Jeep','Kia','Hyundai','Honda','RAM','Mini','JMC','Shineray','SWM','BAIC','DFSK','Chery','Mitsubishi','Suzuki','Mercedes-Benz','BMW','Audi','KTM','Polaris'];
+  $('#marcas').innerHTML = marcas.map(function(m){ return '<option value="'+m+'">'; }).join('');
+
+  var form = $('#form');
+  var pasos = $$('.paso', form);
+  var actual = 0;
+  var maxAlcanzado = 0;
+
+  if (DEMO) $('#avisoDemo').hidden = false;
+
+  // ── barra de pasos ───────────────────────────────────────────
+  var ol = $('#pasos');
+  ol.innerHTML = pasos.map(function(p, i){
+    return '<li><button type="button" data-ir="'+i+'"><span class="barra"></span><span class="txt">'+(i+1)+'. '+p.dataset.nombre+'</span></button></li>';
+  }).join('');
+  ol.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-ir]'); if (!b || b.disabled) return;
+    var i = +b.dataset.ir; if (i <= maxAlcanzado) ir(i);
+  });
+
+  function pintarPasos(){
+    $$('li', ol).forEach(function(li, i){
+      li.className = i === actual ? 'activo' : (i < actual || i <= maxAlcanzado ? 'hecho' : '');
+      var b = li.querySelector('button');
+      b.disabled = i > maxAlcanzado;
+      if (i === actual) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current');
+    });
+    $('#atras').style.visibility = actual === 0 ? 'hidden' : 'visible';
+    $('#txtSig').textContent = actual === pasos.length - 1 ? 'Enviar referido' : 'Siguiente';
+  }
+
+  function ir(i, foco){
+    pasos[actual].classList.remove('activo');
+    actual = i; maxAlcanzado = Math.max(maxAlcanzado, i);
+    pasos[actual].classList.add('activo');
+    if (actual === pasos.length - 1) armarRevision();
+    pintarPasos();
+    ocultarError();
+    var panel = $('.panel');
+    var top = panel.getBoundingClientRect().top + window.scrollY - 84;
+    if (window.scrollY > top) window.scrollTo({ top: top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (foco !== false) { var lg = pasos[actual].querySelector('legend'); lg.setAttribute('tabindex','-1'); lg.focus({preventScroll:true}); }
+  }
+
+  // ── utilidades ───────────────────────────────────────────────
+  function soloDigitos(s){ return String(s||'').replace(/\D+/g,''); }
+  function miles(n){ return n ? Number(n).toLocaleString('es-AR') : ''; }
+  function val(n){ var el = form.elements[n]; if (!el) return ''; if (el.length && el[0] && el[0].type === 'radio'){ var c = form.querySelector('input[name="'+n+'"]:checked'); return c ? c.value : ''; } return el.type === 'checkbox' ? el.checked : String(el.value||'').trim(); }
+  function mailOk(m){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m); }
+  function telOk(t){ var d = soloDigitos(t); return d.length >= 10 && d.length <= 13; }
+  function anioOk(a){ if (!a) return true; if (/^0\s*km$/i.test(a) || a === '0') return true; var n = +soloDigitos(a); return n >= 1990 && n <= new Date().getFullYear() + 1; }
+  function campoDe(el){ return el.closest('.campo'); }
+  function marcar(el, mal){ var c = campoDe(el); if (c) c.classList.toggle('mal', !!mal); if (el.setAttribute) el.setAttribute('aria-invalid', mal ? 'true' : 'false'); }
+
+  // formato de miles en vivo
+  ['presupuesto','usado_km'].forEach(function(id){
+    var el = $('#'+id);
+    el.addEventListener('input', function(){ var d = soloDigitos(el.value).slice(0, 13); el.value = miles(d); });
+  });
+
+  // ── validación por paso ──────────────────────────────────────
+  function validar(i){
+    var malos = [];
+    function chk(name, ok){ var el = form.elements[name]; var target = (el && el.length && el[0] && el[0].type === 'radio') ? el[0] : el; marcar(target, !ok); if (!ok) malos.push(target); }
+    if (i === 0){ chk('ref_nombre', val('ref_nombre').length >= 3); chk('ref_tel', telOk(val('ref_tel'))); var rd = soloDigitos(val('ref_dni')).length; chk('ref_dni', rd === 7 || rd === 8); chk('ref_email', mailOk(val('ref_email'))); }
+    if (i === 1){
+      chk('comp_nombre', val('comp_nombre').length >= 2);
+      chk('comp_tel', telOk(val('comp_tel')));
+      if (telOk(val('comp_tel')) && soloDigitos(val('comp_tel')).slice(-10) === soloDigitos(val('ref_tel')).slice(-10)){
+        marcar(form.elements.comp_tel, true); campoDe(form.elements.comp_tel).querySelector('.err').textContent = 'Es tu mismo número. Poné el del comprador.'; malos.push(form.elements.comp_tel);
+      } else { campoDe(form.elements.comp_tel).querySelector('.err').textContent = 'Poné un número con característica.'; }
+      chk('comp_email', mailOk(val('comp_email')));
+      chk('comp_localidad', val('comp_localidad').length >= 2);
+      chk('comp_aviso', val('comp_aviso'));
+    }
+    if (i === 2){
+      chk('marca', val('marca').length >= 2);
+      chk('anio', anioOk(val('anio')));
+      var p = val('presupuesto'); chk('presupuesto', !p || soloDigitos(p).length > 0);
+      chk('entrega', !!val('entrega'));
+    }
+    if (i === 3){
+      chk('financia', !!val('financia'));
+      if (val('financia') === 'si'){
+        var d = soloDigitos(val('comp_dni')), dniRef = soloDigitos(val('ref_dni'));
+        var mismo = d && dniRef && (d === dniRef || (d.length === 11 && d.slice(2, 10).replace(/^0/, '') === dniRef));
+        campoDe(form.elements.comp_dni).querySelector('.err').textContent = mismo ? 'Es tu mismo DNI. No podés referirte a vos mismo.' : 'Revisá el número: el DNI tiene 7 u 8 dígitos y el CUIL 11.';
+        chk('comp_dni', !mismo && (!d || d.length === 7 || d.length === 8 || d.length === 11));
+      }
+    }
+    if (i === 4){ chk('acepto', val('acepto')); }
+    if (malos.length){ malos[0].focus(); return false; }
+    return true;
+  }
+  form.addEventListener('input', function(e){ var c = campoDe(e.target); if (c && c.classList.contains('mal')) { c.classList.remove('mal'); e.target.setAttribute('aria-invalid','false'); } guardar(); llavero(); });
+  form.addEventListener('change', function(e){ var c = campoDe(e.target); if (c) c.classList.remove('mal'); condicionales(); guardar(); llavero(); });
+
+  function condicionales(){
+    $('#subUsado').classList.toggle('ver', val('entrega') === 'si');
+    $('#subFin').classList.toggle('ver', val('financia') === 'si');
+  }
+
+  // ── garantes ─────────────────────────────────────────────────
+  var nGar = 0;
+  function agregarGarante(datos){
+    if ($$('.garante').length >= 3) return;
+    nGar++; var id = nGar; datos = datos || {};
+    var div = document.createElement('div'); div.className = 'garante'; div.dataset.g = id;
+    div.innerHTML =
+      '<div class="g-head"><span>Garante</span><button type="button" class="link-btn" data-quitar="'+id+'">Quitar</button></div>'+
+      '<div class="campo"><label for="g'+id+'_n">Nombre</label><input id="g'+id+'_n" data-gc="nombre" type="text" maxlength="80" autocomplete="off"></div>'+
+      '<div class="campo"><label for="g'+id+'_d">DNI o CUIL</label><input id="g'+id+'_d" data-gc="dni" type="text" inputmode="numeric" maxlength="13" autocomplete="off"></div>'+
+      '<div class="campo"><label for="g'+id+'_t">Teléfono</label><input id="g'+id+'_t" data-gc="tel" type="tel" inputmode="tel" maxlength="20" autocomplete="off"></div>';
+    $('#garantes').appendChild(div);
+    $$('input', div).forEach(function(inp){ if (datos[inp.dataset.gc]) inp.value = datos[inp.dataset.gc]; });
+    $('#agregarGarante').hidden = $$('.garante').length >= 3;
+    return div;
+  }
+  $('#agregarGarante').addEventListener('click', function(){ var d = agregarGarante(); if (d) d.querySelector('input').focus(); guardar(); });
+  $('#garantes').addEventListener('click', function(e){ var b = e.target.closest('[data-quitar]'); if (!b) return; var g = b.closest('.garante'); g.remove(); $('#agregarGarante').hidden = false; guardar(); });
+  function garantes(){
+    return $$('.garante').map(function(g){ var o = {}; $$('input', g).forEach(function(i){ o[i.dataset.gc] = i.value.trim(); }); return o; })
+      .filter(function(o){ return o.nombre || o.dni || o.tel; });
+  }
+
+  // ── datos ────────────────────────────────────────────────────
+  function datos(){
+    var fin = val('financia');
+    return {
+      ref_nombre: val('ref_nombre'), ref_tel: val('ref_tel'), ref_dni: soloDigitos(val('ref_dni')), ref_email: val('ref_email'), ref_alias: val('ref_alias'),
+      comp_nombre: val('comp_nombre'), comp_tel: val('comp_tel'), comp_email: val('comp_email'), comp_localidad: val('comp_localidad'), comp_aviso: !!val('comp_aviso'),
+      marca: val('marca'), modelo: val('modelo'), anio: val('anio'),
+      moneda: val('moneda'), presupuesto: soloDigitos(val('presupuesto')),
+      entrega: val('entrega'),
+      usado_marca_modelo: val('entrega') === 'si' ? val('usado_marca_modelo') : '',
+      usado_anio: val('entrega') === 'si' ? val('usado_anio') : '',
+      usado_km: val('entrega') === 'si' ? soloDigitos(val('usado_km')) : '',
+      financia: fin,
+      comp_dni: fin === 'si' ? soloDigitos(val('comp_dni')) : '',
+      garantes: fin === 'si' ? garantes() : [],
+      comentarios: val('comentarios'),
+      acepto: !!val('acepto'),
+      empresa: val('empresa'),
+      origen: (new URLSearchParams(location.search).get('v') || '').slice(0, 40)
+    };
+  }
+  function txtPres(d){ if (!d.presupuesto) return ''; return (d.moneda === 'USD' ? 'US$ ' : '$ ') + miles(d.presupuesto); }
+  function txtAuto(d){ return [d.marca, d.modelo].filter(Boolean).join(' ') + (d.anio ? ' · ' + d.anio : ''); }
+  var SINO = { si:'Sí', no:'No', nose:'No sabe' };
+
+  // ── llavero en vivo ──────────────────────────────────────────
+  function set(id, texto){ var el = $('#'+id); el.textContent = texto || 'Sin cargar'; el.classList.toggle('vacio', !texto); }
+  function llavero(){
+    var d = datos();
+    $('#t_ref').textContent = 'de ' + (d.ref_nombre ? d.ref_nombre.split(' ')[0] : '—');
+    set('t_comp', d.comp_nombre);
+    set('t_auto', txtAuto(d).trim());
+    set('t_pres', txtPres(d));
+    set('t_usado', d.entrega === 'si' ? ('Sí' + (d.usado_marca_modelo ? ', ' + d.usado_marca_modelo : '') + (d.usado_anio ? ' ' + d.usado_anio : '')) : (SINO[d.entrega] || ''));
+    set('t_fin', SINO[d.financia] || '');
+  }
+
+  // ── revisión ─────────────────────────────────────────────────
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+  function fila(k, v){ return v ? '<dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd>' : ''; }
+  function bloque(titulo, paso, filas){ return '<section class="bloque-rev"><header><h4>'+titulo+'</h4><button type="button" class="link-btn" data-ir-paso="'+paso+'">Cambiar</button></header><dl>'+filas+'</dl></section>'; }
+  function armarRevision(){
+    var d = datos();
+    var html = bloque('Vos', 0, fila('Nombre', d.ref_nombre) + fila('WhatsApp', d.ref_tel) + fila('DNI', d.ref_dni) + fila('Correo', d.ref_email) + fila('Alias / CBU', d.ref_alias));
+    html += bloque('Comprador', 1, fila('Nombre', d.comp_nombre) + fila('Teléfono', d.comp_tel) + fila('Correo', d.comp_email) + fila('Zona', d.comp_localidad));
+    html += bloque('Auto que busca', 2, fila('Auto', txtAuto(d)) + fila('Presupuesto', txtPres(d)) + fila('Entrega usado', SINO[d.entrega]) +
+      fila('Usado', [d.usado_marca_modelo, d.usado_anio, d.usado_km ? miles(d.usado_km) + ' km' : ''].filter(Boolean).join(' · ')));
+    html += bloque('Financiación', 3, fila('Financia', SINO[d.financia]) + fila('DNI / CUIL', d.comp_dni) +
+      d.garantes.map(function(g, i){ return fila('Garante ' + (i+1), [g.nombre, g.dni, g.tel].filter(Boolean).join(' · ')); }).join('') + fila('Comentarios', d.comentarios));
+    $('#revisar').innerHTML = html;
+  }
+  $('#revisar').addEventListener('click', function(e){ var b = e.target.closest('[data-ir-paso]'); if (b) ir(+b.dataset.irPaso); });
+
+  // ── borrador local ───────────────────────────────────────────
+  function guardar(){
+    try { var d = datos(); delete d.acepto; delete d.empresa; localStorage.setItem(GUARDADO, JSON.stringify({ d: d, paso: actual, max: maxAlcanzado })); } catch(e){}
+  }
+  function poner(d){
+    Object.keys(d).forEach(function(k){
+      var el = form.elements[k]; if (!el || k === 'garantes') return;
+      if (el.length && el[0] && el[0].type === 'radio'){ $$('input[name="'+k+'"]', form).forEach(function(r){ r.checked = r.value === d[k]; }); }
+      else if (el.type === 'checkbox') el.checked = !!d[k];
+      else if (k === 'presupuesto' || k === 'usado_km') el.value = miles(d[k]);
+      else el.value = d[k] || '';
+    });
+    (d.garantes || []).forEach(function(g){ agregarGarante(g); });
+  }
+  function restaurar(){
+    try {
+      var g = JSON.parse(localStorage.getItem(GUARDADO) || 'null');
+      if (g && g.d){ poner(g.d); maxAlcanzado = Math.min(g.max || 0, pasos.length - 2); }
+      else { var yo = JSON.parse(localStorage.getItem(YO) || 'null'); if (yo) poner(yo); }
+    } catch(e){}
+    condicionales(); llavero(); pintarPasos();
+  }
+
+  // ── navegación / envío ───────────────────────────────────────
+  $('#atras').addEventListener('click', function(){ if (actual > 0) ir(actual - 1); });
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    if (!validar(actual)) return;
+    if (actual < pasos.length - 1) { ir(actual + 1); guardar(); return; }
+    enviar();
+  });
+
+  var enviando = false;
+  function mostrarError(t){ var a = $('#avisoError'); a.textContent = t; a.classList.add('ver'); }
+  function ocultarError(){ $('#avisoError').classList.remove('ver'); }
+
+  function enviar(){
+    if (enviando) return; enviando = true;
+    var btn = $('#siguiente'); btn.disabled = true; btn.classList.add('enviando'); $('#txtSig').textContent = 'Enviando…';
+    ocultarError();
+    var d = datos();
+    var fin = function(){ enviando = false; btn.disabled = false; btn.classList.remove('enviando'); pintarPasos(); };
+    if (DEMO){ setTimeout(function(){ fin(); listo(d, { codigo: 'R-DEMO' }); }, 900); return; }
+    var ctrl = ('AbortController' in window) ? new AbortController() : null;
+    var t = setTimeout(function(){ if (ctrl) ctrl.abort(); }, 20000);
+    fetch(API + '/api/referidos', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(d), signal: ctrl ? ctrl.signal : undefined })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return { r: r, j: j }; }); })
+      .then(function(x){
+        clearTimeout(t); fin();
+        if (x.r.ok && x.j.ok) return listo(d, x.j);
+        if (x.r.status === 409) return mostrarError(x.j.error || 'Este comprador ya fue referido. Si creés que es un error, escribinos al 351 517-1111.');
+        if (x.r.status === 429) return mostrarError('Cargaste muchos referidos seguidos. Esperá unos minutos y volvé a enviar.');
+        mostrarError(x.j.error || 'No pudimos guardar el referido. Probá de nuevo en un rato; tus datos quedan guardados.');
+      })
+      .catch(function(){ clearTimeout(t); fin(); mostrarError('No pudimos enviar. Revisá tu conexión y tocá “Enviar referido” otra vez; tus datos quedan guardados.'); });
+  }
+
+  function listo(d, resp){
+    try {
+      localStorage.removeItem(GUARDADO);
+      localStorage.setItem(YO, JSON.stringify({ ref_nombre: d.ref_nombre, ref_tel: d.ref_tel, ref_dni: d.ref_dni, ref_email: d.ref_email, ref_alias: d.ref_alias }));
+    } catch(e){}
+    form.hidden = true;
+    var nom = d.ref_nombre.split(' ')[0];
+    $('#listoTitulo').textContent = 'Listo, ' + nom + '. Ya cargamos a ' + d.comp_nombre.split(' ')[0] + '.';
+    $('#listoCodigo').textContent = resp.codigo ? 'Código de referido ' + resp.codigo : '';
+    var msj = 'Te paso esto: en Tutu Automotores pagan $100.000 si les pasás un comprador de auto y compra. Se carga acá: ' + LINK_PUBLICO;
+    $('#compartir').href = 'https://wa.me/?text=' + encodeURIComponent(msj);
+    $('#listo').classList.add('ver');
+    $('#listo').setAttribute('tabindex','-1'); $('#listo').focus();
+  }
+
+  $('#otro').addEventListener('click', function(){
+    var yo = { ref_nombre: val('ref_nombre'), ref_tel: val('ref_tel'), ref_dni: val('ref_dni'), ref_email: val('ref_email'), ref_alias: val('ref_alias') };
+    form.reset(); $$('.garante').forEach(function(g){ g.remove(); }); $('#agregarGarante').hidden = false;
+    poner(yo); condicionales();
+    $('#listo').classList.remove('ver'); form.hidden = false;
+    pasos[actual].classList.remove('activo'); actual = 1; maxAlcanzado = 1; pasos[1].classList.add('activo');
+    pintarPasos(); llavero(); ir(1);
+  });
+
+  // botón flotante en celular: visible fuera del formulario
+  var cta = $('#ctaMovil');
+  if ('IntersectionObserver' in window){
+    var vistos = new Set();
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if (e.isIntersecting) vistos.add(e.target); else vistos.delete(e.target); });
+      cta.classList.toggle('ver', vistos.size === 0);
+    }, { threshold: 0 });
+    io.observe($('.hero .acciones')); io.observe($('#referir')); io.observe($('.pie'));
+  }
+
+  restaurar();
+
+  var ahora = new Date();
+  if (ahora > FIN || ahora < INICIO) {
+    form.hidden = true;
+    var l = $('#listo'); l.classList.add('ver');
+    l.querySelector('.sello').hidden = true; $('#otro').hidden = true; $('#listoCodigo').hidden = true;
+    $('#listoTitulo').textContent = ahora > FIN ? 'La campaña terminó el 31/12/2026.' : 'La campaña empieza el 12/11/2026.';
+    $('#listoTexto').textContent = 'Ya no se reciben referidos por este formulario. Si tenés un referido en curso, escribinos al WhatsApp 351 517-1111.';
+    $('#compartir').hidden = true;
+  }
+})();
+</script>
+</body>
+</html>
