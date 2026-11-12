@@ -1270,6 +1270,9 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
 // ── KOMMO: webhook para pedir autos y calificar clientes por banco ───────────
 require('./kommo-webhook')(app, pool, buscarEnStock)
 
+// ── CLUB DE REFERIDOS: landing /referidos + panel /referidos/admin ──────────
+require('./referidos')(app, pool)
+
 // ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
 // Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
 // Variables de entorno en Railway: KOMMO_LECTURA_TOKEN (obligatoria, token de larga duración; es distinta de KOMMO_TOKEN, que usa el webhook para ESCRIBIR en Kommo),

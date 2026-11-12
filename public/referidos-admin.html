@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Referidos · Panel Tutu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@1,100..125,800..900&family=DM+Sans:opsz,wght@9..40,400..700&display=swap" rel="stylesheet">
+<style>
+:root{--asfalto:#0E1116;--azul:#3686F7;--azul-hondo:#002E6E;--fondo:#EEF1F6;--blanco:#fff;--tinta:#141821;--tinta-2:#4A5568;--borde:#D5DCE6;--ok:#1F9D63;--error:#B42323;
+  --e-nuevo:#3686F7;--e-contactado:#7A5AF8;--e-en_gestion:#D98A00;--e-vendido:#1F9D63;--e-pagado:#0E6B43;--e-descartado:#8A94A6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fondo);color:var(--tinta);font:15px/1.5 "DM Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:var(--azul);color:#fff}
+:focus-visible{outline:3px solid var(--azul);outline-offset:2px;border-radius:6px}
+button,input,select,textarea{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+header.bar{background:var(--asfalto);color:#F4F6FA;padding:0 20px}
+header.bar .in{max-width:1400px;margin:auto;height:60px;display:flex;align-items:center;gap:16px;justify-content:space-between}
+header.bar b{font-family:Archivo,sans-serif;font-style:italic;font-weight:900;font-stretch:112%;font-size:20px}
+header.bar span{color:#B4BFCE;font-size:14px}
+.btn{appearance:none;border:1px solid var(--borde);background:var(--blanco);border-radius:999px;min-height:40px;padding:0 16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:var(--tinta)}
+.btn:hover{border-color:var(--tinta-2)}
+.btn.pri{background:#1F6CD9;border-color:#1F6CD9;color:#fff}
+.btn.pri:hover{background:#1959BD}
+header .btn{background:transparent;color:#F4F6FA;border-color:#2E3644}
+main{max-width:1400px;margin:auto;padding:24px 20px 60px}
+.login{max-width:380px;margin:12vh auto;background:var(--blanco);border-radius:18px;padding:32px;box-shadow:0 20px 50px -30px rgba(0,30,80,.35)}
+.login h1{font-family:Archivo,sans-serif;font-style:italic;font-weight:900;font-size:28px;margin:0 0 6px;letter-spacing:-.02em}
+.login p{color:var(--tinta-2);margin:0 0 20px}
+input,select,textarea{width:100%;min-height:42px;padding:9px 12px;border:1.5px solid var(--borde);border-radius:8px;background:#fff;caret-color:var(--azul)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--azul);box-shadow:0 0 0 3px rgba(54,134,247,.18)}
+.msg{color:var(--error);font-weight:600;min-height:22px;margin:10px 0}
+.resumen{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.filtro{appearance:none;border:1.5px solid var(--borde);background:#fff;border-radius:999px;padding:6px 14px;cursor:pointer;font-weight:600;font-size:14px;display:inline-flex;gap:8px;align-items:center;min-height:38px}
+.filtro i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.filtro[aria-pressed=true]{background:var(--asfalto);border-color:var(--asfalto);color:#fff}
+.herr{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.herr input{max-width:340px}
+.herr .der{margin-left:auto;display:flex;gap:8px}
+.a-pagar{background:#fff;border-radius:12px;padding:10px 16px;font-weight:600}
+.a-pagar strong{color:var(--e-vendido)}
+.tabla{background:#fff;border-radius:14px;overflow:auto;box-shadow:0 1px 0 rgba(20,24,33,.04)}
+table{border-collapse:collapse;width:100%;min-width:1080px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid #E7ECF2;vertical-align:top}
+th{font-size:12px;font-weight:700;color:var(--tinta-2);background:#F7F9FC;position:sticky;top:0}
+tr.fila{cursor:pointer}
+tr.fila:hover td{background:#F7FAFF}
+td small{display:block;color:var(--tinta-2);font-size:13px}
+.estado{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:13px;white-space:nowrap}
+.estado i{width:9px;height:9px;border-radius:50%}
+.vacio{padding:48px;text-align:center;color:var(--tinta-2)}
+.det td{background:#FAFBFD}
+.det-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) 1.3fr;gap:18px}
+.det-grid h4{margin:0 0 6px;font-size:13px;color:var(--tinta-2)}
+.det-grid dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 12px}
+.det-grid dt{color:var(--tinta-2)}
+.det-grid dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.det-grid .acc{display:flex;flex-direction:column;gap:8px}
+.det-grid .acc .fila2{display:flex;gap:8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.wa{color:#0E6B43;font-weight:700;text-decoration:none}
+.wa:hover{text-decoration:underline}
+.guardado{color:var(--ok);font-size:13px;font-weight:600;min-height:20px}
+@media (max-width:900px){.det-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header class="bar"><div class="in"><div><b>TUTU</b> <span>· Club de Referidos</span></div><button class="btn" id="salir" hidden>Salir</button></div></header>
+<main id="app">
+  <form class="login" id="login">
+    <h1>Panel de referidos</h1>
+    <p>Ingresá la contraseña del panel.</p>
+    <label for="pass" style="font-weight:600;font-size:14px">Contraseña</label>
+    <input id="pass" type="password" autocomplete="current-password" required>
+    <div class="msg" id="loginMsg" role="alert"></div>
+    <button class="btn pri" type="submit" style="width:100%;justify-content:center">Entrar</button>
+  </form>
+
+  <section id="panel" hidden>
+    <div class="resumen" id="resumen" role="group" aria-label="Filtrar por estado"></div>
+    <div class="herr">
+      <input id="buscar" type="search" placeholder="Buscar por nombre, teléfono o auto" aria-label="Buscar">
+      <span class="a-pagar" id="aPagar"></span>
+      <div class="der">
+        <button class="btn" id="recargar">Actualizar</button>
+        <a class="btn" id="csv" href="#">Descargar CSV</a>
+      </div>
+    </div>
+    <div class="msg" id="panelMsg" role="alert"></div>
+    <div class="tabla"><table>
+      <thead><tr><th>Código</th><th>Fecha</th><th>Comprador</th><th>Busca</th><th>Presupuesto</th><th>Usado</th><th>Financia</th><th>Refirió</th><th>Estado</th></tr></thead>
+      <tbody id="filas"></tbody>
+    </table></div>
+  </section>
+</main>
+<script>
+(function(){
+  'use strict';
+  var API = '';
+  var ESTADOS = { nuevo:'Nuevo', contactado:'Contactado', en_gestion:'En gestión', vendido:'Venta confirmada — pagar', pagado:'Pagado', descartado:'Descartado' };
+  var SINO = { si:'Sí', no:'No', nose:'No sabe' };
+  var pass = '', filtro = '', datos = [], abierto = null, premio = 100000, camp = null;
+  var $ = function(s){ return document.querySelector(s); };
+  try { pass = sessionStorage.getItem('tutu_ref_pass') || ''; } catch(e){}
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+  function miles(n){ return n ? Number(n).toLocaleString('es-AR') : ''; }
+  function fecha(s){ var d = new Date(s); return d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' }) + ' ' + d.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }); }
+  function wa(tel){ var d = String(tel||'').replace(/\D/g,''); if (d.length === 10) d = '549' + d; return 'https://wa.me/' + d; }
+  function color(e){ return 'var(--e-' + e + ')'; }
+
+  function api(url, opt){
+    opt = opt || {}; opt.headers = Object.assign({ 'x-referidos-pass': pass, 'Content-Type': 'application/json' }, opt.headers || {});
+    return fetch(API + url, opt).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ if (!r.ok) { var e = new Error(j.error || ('Error ' + r.status)); e.status = r.status; throw e; } return j; }); });
+  }
+
+  function cargar(){
+    var q = $('#buscar').value.trim();
+    var qs = '?' + (filtro ? 'estado=' + filtro + '&' : '') + (q ? 'q=' + encodeURIComponent(q) : '');
+    return api('/api/referidos' + qs).then(function(j){
+      premio = j.premio || premio; datos = j.referidos; camp = j.campania || null; $('#panelMsg').textContent = '';
+      resumen(j.totales); tabla();
+      $('#login').hidden = true; $('#panel').hidden = false; $('#salir').hidden = false;
+      $('#csv').href = API + '/api/referidos.csv?pass=' + encodeURIComponent(pass);
+    });
+  }
+  function resumen(t){
+    var total = Object.keys(t).reduce(function(a, k){ return a + t[k]; }, 0);
+    var html = '<button class="filtro" data-f="" aria-pressed="'+(filtro === '')+'">Todos <span class="num">'+total+'</span></button>';
+    Object.keys(ESTADOS).forEach(function(k){ html += '<button class="filtro" data-f="'+k+'" aria-pressed="'+(filtro === k)+'"><i style="background:'+color(k)+'"></i>'+ESTADOS[k]+' <span class="num">'+(t[k]||0)+'</span></button>'; });
+    $('#resumen').innerHTML = html;
+    var aPagar = datos.filter(function(r){ return r.estado === 'vendido' && !r.sin_beneficio; }).length;
+    if (filtro && filtro !== 'vendido') aPagar = null;
+    $('#aPagar').innerHTML = (aPagar === null ? '' : 'A pagar: <strong class="num">$ ' + (aPagar * premio).toLocaleString('es-AR') + '</strong> <span style="color:var(--tinta-2);font-weight:500">(' + aPagar + ')</span> · ') +
+      (camp ? 'Beneficios de la campaña: <strong class="num">' + camp.beneficios_otorgados + ' / ' + camp.tope_total + '</strong> · Cierra el ' + new Date(camp.fin).toLocaleDateString('es-AR') : '');
+  }
+  function tabla(){
+    if (!datos.length) { $('#filas').innerHTML = '<tr><td colspan="9" class="vacio">Todavía no hay referidos con este filtro.</td></tr>'; return; }
+    $('#filas').innerHTML = datos.map(function(r){
+      var fila = '<tr class="fila" data-id="'+r.id+'" tabindex="0">'+
+        '<td><b class="num">'+r.codigo+'</b></td>'+
+        '<td class="num">'+fecha(r.creado)+'</td>'+
+        '<td><b>'+esc(r.comp_nombre)+'</b><small class="num">'+esc(r.comp_tel)+'</small></td>'+
+        '<td>'+esc([r.marca, r.modelo].filter(Boolean).join(' '))+'<small>'+esc(r.anio||'')+'</small></td>'+
+        '<td class="num">'+(r.presupuesto ? (r.moneda === 'USD' ? 'US$ ' : '$ ') + miles(r.presupuesto) : '—')+'</td>'+
+        '<td>'+(SINO[r.entrega]||'—')+(r.usado_marca_modelo ? '<small>'+esc(r.usado_marca_modelo+' '+(r.usado_anio||''))+'</small>' : '')+'</td>'+
+        '<td>'+(SINO[r.financia]||'—')+(r.comp_dni ? '<small class="num">DNI '+esc(r.comp_dni)+'</small>' : '')+'</td>'+
+        '<td>'+esc(r.ref_nombre)+'<small class="num">'+esc(r.ref_tel)+'</small></td>'+
+        '<td><span class="estado"><i style="background:'+color(r.estado)+'"></i>'+ESTADOS[r.estado]+'</span>'+
+          (r.sin_beneficio ? '<small style="color:var(--error);font-weight:700">Supera el tope: no se paga</small>' : '')+
+          (r.vencido ? '<small style="color:var(--e-en_gestion);font-weight:700">Venció el plazo de 60 días</small>' : '')+'</td></tr>';
+      if (abierto === r.id) fila += detalle(r);
+      return fila;
+    }).join('');
+  }
+  function detalle(r){
+    var gar = (r.garantes||[]).map(function(g, i){ return '<dt>Garante '+(i+1)+'</dt><dd>'+esc([g.nombre, g.dni, g.tel].filter(Boolean).join(' · '))+'</dd>'; }).join('');
+    var ops = Object.keys(ESTADOS).map(function(k){ return '<option value="'+k+'"'+(k === r.estado ? ' selected' : '')+'>'+ESTADOS[k]+'</option>'; }).join('');
+    return '<tr class="det"><td colspan="9"><div class="det-grid">'+
+      '<div><h4>Comprador</h4><dl><dt>Nombre</dt><dd>'+esc(r.comp_nombre)+'</dd><dt>Teléfono</dt><dd><a class="wa" href="'+wa(r.comp_tel)+'" target="_blank" rel="noopener">'+esc(r.comp_tel)+'</a></dd>'+(r.comp_email ? '<dt>Correo</dt><dd>'+esc(r.comp_email)+'</dd>' : '')+'<dt>Vence</dt><dd class="num">'+new Date(r.vence).toLocaleDateString('es-AR')+'</dd>'+(r.comp_localidad ? '<dt>Zona</dt><dd>'+esc(r.comp_localidad)+'</dd>' : '')+(r.comp_dni ? '<dt>DNI/CUIL</dt><dd class="num">'+esc(r.comp_dni)+'</dd>' : '')+gar+'</dl></div>'+
+      '<div><h4>Auto</h4><dl><dt>Busca</dt><dd>'+esc([r.marca, r.modelo, r.anio].filter(Boolean).join(' '))+'</dd><dt>Presupuesto</dt><dd class="num">'+(r.presupuesto ? (r.moneda === 'USD' ? 'US$ ' : '$ ') + miles(r.presupuesto) : '—')+'</dd><dt>Usado</dt><dd>'+(r.entrega === 'si' ? esc([r.usado_marca_modelo, r.usado_anio, r.usado_km ? miles(r.usado_km)+' km' : ''].filter(Boolean).join(' · ') || 'Sí') : (SINO[r.entrega]||'—'))+'</dd><dt>Financia</dt><dd>'+(SINO[r.financia]||'—')+'</dd></dl>'+(r.comentarios ? '<p style="margin:10px 0 0"><b>Comentario:</b> '+esc(r.comentarios)+'</p>' : '')+'</div>'+
+      '<div><h4>Refirió</h4><dl><dt>Nombre</dt><dd>'+esc(r.ref_nombre)+'</dd><dt>WhatsApp</dt><dd><a class="wa" href="'+wa(r.ref_tel)+'" target="_blank" rel="noopener">'+esc(r.ref_tel)+'</a></dd><dt>DNI</dt><dd class="num">'+esc(r.ref_dni || '—')+'</dd>'+(r.ref_email ? '<dt>Correo</dt><dd>'+esc(r.ref_email)+'</dd>' : '')+'<dt>Alias/CBU</dt><dd>'+esc(r.ref_alias || '—')+'</dd><dt>Beneficios</dt><dd class="num">'+(r.beneficios_referente||0)+' de '+(camp ? camp.tope_referente : 5)+'</dd>'+(r.pagado_en ? '<dt>Pagado</dt><dd>'+fecha(r.pagado_en)+'</dd>' : '')+(r.origen ? '<dt>Origen</dt><dd>'+esc(r.origen)+'</dd>' : '')+'</dl></div>'+
+      '<div class="acc"><h4>Gestión</h4>'+
+        '<label class="sr" for="est'+r.id+'">Estado</label><select id="est'+r.id+'" data-campo="estado" data-id="'+r.id+'">'+ops+'</select>'+
+        '<input data-campo="vendedor" data-id="'+r.id+'" placeholder="Vendedor asignado" value="'+esc(r.vendedor||'')+'" aria-label="Vendedor asignado">'+
+        '<textarea data-campo="notas" data-id="'+r.id+'" rows="3" placeholder="Notas internas" aria-label="Notas internas">'+esc(r.notas||'')+'</textarea>'+
+        '<div class="fila2"><button class="btn pri" data-guardar="'+r.id+'">Guardar</button><span class="guardado" id="ok'+r.id+'" role="status"></span></div>'+
+      '</div></div></td></tr>';
+  }
+
+  $('#filas').addEventListener('click', function(e){
+    var g = e.target.closest('[data-guardar]');
+    if (g) { guardar(+g.dataset.guardar); return; }
+    if (e.target.closest('.det')) return;
+    var tr = e.target.closest('tr.fila'); if (!tr) return;
+    var id = +tr.dataset.id; abierto = abierto === id ? null : id; tabla();
+  });
+  $('#filas').addEventListener('keydown', function(e){ if (e.key === 'Enter' && e.target.matches('tr.fila')) e.target.click(); });
+
+  function guardar(id){
+    var cuerpo = {};
+    document.querySelectorAll('[data-id="'+id+'"][data-campo]').forEach(function(el){ cuerpo[el.dataset.campo] = el.value; });
+    var r = datos.find(function(x){ return x.id === id; });
+    if (cuerpo.estado === 'pagado' && r.estado !== 'pagado' && !window.__confirmoPago) {
+      $('#ok'+id).textContent = 'Tocá Guardar otra vez para confirmar el pago de $' + miles(premio) + '.'; $('#ok'+id).style.color = 'var(--e-en_gestion)';
+      window.__confirmoPago = true; setTimeout(function(){ window.__confirmoPago = false; }, 6000); return;
+    }
+    window.__confirmoPago = false;
+    api('/api/referidos/' + id, { method:'PATCH', body: JSON.stringify(cuerpo) }).then(function(){
+      return cargar();
+    }).then(function(){ var ok = document.getElementById('ok'+id); if (ok){ ok.style.color = ''; ok.textContent = 'Guardado'; } })
+      .catch(function(e){ $('#panelMsg').textContent = e.message; });
+  }
+
+  $('#resumen').addEventListener('click', function(e){ var b = e.target.closest('[data-f]'); if (!b) return; filtro = b.dataset.f; abierto = null; cargar().catch(err); });
+  var tBus; $('#buscar').addEventListener('input', function(){ clearTimeout(tBus); tBus = setTimeout(function(){ cargar().catch(err); }, 300); });
+  $('#recargar').addEventListener('click', function(){ cargar().catch(err); });
+  $('#salir').addEventListener('click', function(){ try { sessionStorage.removeItem('tutu_ref_pass'); } catch(e){} location.reload(); });
+  function err(e){ if (e.status === 401) { pass = ''; $('#panel').hidden = true; $('#login').hidden = false; $('#loginMsg').textContent = e.message; } else $('#panelMsg').textContent = e.message; }
+
+  $('#login').addEventListener('submit', function(e){
+    e.preventDefault(); pass = $('#pass').value; $('#loginMsg').textContent = '';
+    cargar().then(function(){ try { sessionStorage.setItem('tutu_ref_pass', pass); } catch(e){} }).catch(function(e){ $('#loginMsg').textContent = e.message; });
+  });
+  if (pass) cargar().catch(err);
+  setInterval(function(){ if (pass && !$('#panel').hidden && abierto === null) cargar().catch(function(){}); }, 60000);
+})();
+</script>
+</body>
+</html>
