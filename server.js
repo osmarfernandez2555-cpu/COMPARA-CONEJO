@@ -1270,9 +1270,6 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
 // ── KOMMO: webhook para pedir autos y calificar clientes por banco ───────────
 require('./kommo-webhook')(app, pool, buscarEnStock)
 
-// ── CLUB DE REFERIDOS: landing /referidos + panel /referidos/admin ──────────
-require('./referidos')(app, pool)
-
 // ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
 // Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
 // Variables de entorno en Railway: KOMMO_LECTURA_TOKEN (obligatoria, token de larga duración; es distinta de KOMMO_TOKEN, que usa el webhook para ESCRIBIR en Kommo),
@@ -1301,7 +1298,7 @@ function kommoNorm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]
 
 async function kommoGet(pathAndQuery, intento = 0) {
   if (!kommoTokenLectura()) throw new Error('Falta configurar KOMMO_LECTURA_TOKEN en Railway (variables del servicio de Ruthina).')
-  const r = await fetch(KOMMO_BASE + pathAndQuery, { headers: { Authorization: 'Bearer ' + kommoTokenLectura(), Accept: 'application/json' } })
+  const r = await fetch(KOMMO_BASE + pathAndQuery, { headers: { Authorization: 'Bearer ' + kommoTokenLectura(), Accept: 'application/json' }, timeout: 60000 })
   if (r.status === 204) return {}
   if (r.status === 429 && intento < 3) { await new Promise(s => setTimeout(s, 1200)); return kommoGet(pathAndQuery, intento + 1) }
   if (r.status === 401) throw new Error('Kommo rechazó el token (401). Hay que generar uno nuevo y cargarlo en KOMMO_LECTURA_TOKEN.')
@@ -1518,11 +1515,40 @@ app.post('/api/kommo/chat', kommoAuth, async (req, res) => {
 Consultás Kommo SOLO en modo lectura con las herramientas; nunca podés modificar nada en Kommo, y si te lo piden, decí que este panel es solo de consulta.
 Reglas: usá siempre las herramientas para obtener datos y nunca inventes cifras. Si una herramienta devuelve un aviso o un error, decíselo al usuario. Si el nombre del vendedor es ambiguo, preguntá cuál. "Hoy" es el día de hoy en hora argentina. Para "mensajes sin contestar" usá la herramienta mensajes_sin_contestar y aclará que son conversaciones donde el último mensaje fue del cliente. Cuando hables de "con cuántos habló", explicá que son clientes distintos a los que el vendedor les envió al menos un mensaje en Kommo. Presentá listas con guiones, sin tablas.`
   const usadas = []
+  // Límite total: si pasan KOMMO_CHAT_LIMITE_SEG (3 min) se responde con lo que se alcanzó a obtener
+  const LIMITE_MS = Math.max(20, Number(process.env.KOMMO_CHAT_LIMITE_SEG || 180)) * 1000
+  const t0 = Date.now()
+  const quedan = () => LIMITE_MS - (Date.now() - t0)
+  const obtenidos = []   // lo que devolvieron las herramientas (para el aviso de último recurso)
+  const conTope = (promesa, ms, msg) => Promise.race([promesa, new Promise((_, no) => setTimeout(() => no(new Error(msg)), Math.max(ms, 1)))])
+  const llamarIA = async (msgs, conHerramientas, ms) => {
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), Math.max(ms, 3000))
+    try {
+      const r = await fetch(KOMMO_ANTHROPIC_URL, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify(Object.assign({ model: KOMMO_MODEL, max_tokens: 1500, system, messages: msgs }, conHerramientas ? { tools: KOMMO_TOOLS } : {})) })
+      const d = await r.json()
+      return { r, d }
+    } finally { clearTimeout(timer) }
+  }
+  // respuesta con lo que hay: primero le pedimos a la IA que cierre sin herramientas; si no llega, se devuelve lo obtenido tal cual
+  const responderConLoQueHay = async (motivo) => {
+    try {
+      const msgs = messages.concat([{ role: 'user', content: 'Se acabó el tiempo (' + motivo + '). Respondé ya, sin usar más herramientas, con lo que obtuviste hasta ahora. Aclará brevemente qué parte quedó incompleta y qué se puede preguntar de forma más puntual para completarla.' }])
+      const { r, d } = await llamarIA(msgs, false, 45000)
+      const texto = r.ok ? (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim() : ''
+      if (texto) return texto
+    } catch (e) { console.error('Kommo chat parcial:', e.message) }
+    return obtenidos.length
+      ? 'Tardó más de lo esperado, esto es lo que alcancé a obtener de Kommo:\n' + obtenidos.map(x => '- ' + x.slice(0, 1500)).join('\n')
+      : 'Kommo tardó más de lo esperado y todavía no tengo datos. Probá con una pregunta más puntual (un solo vendedor o solo hoy).'
+  }
   try {
     for (let i = 0; i < 8; i++) {
-      const r = await fetch(KOMMO_ANTHROPIC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: KOMMO_MODEL, max_tokens: 1500, system, tools: KOMMO_TOOLS, messages }) })
-      const d = await r.json()
+      if (quedan() < 15000) return res.json({ respuesta: await responderConLoQueHay('pasaron más de ' + Math.round(LIMITE_MS / 60000) + ' minutos'), parcial: true, herramientas: usadas })
+      let r, d
+      try { ({ r, d } = await llamarIA(messages, true, quedan())) }
+      catch (e) { if (e.name === 'AbortError') return res.json({ respuesta: await responderConLoQueHay('la IA tardó demasiado'), parcial: true, herramientas: usadas }); throw e }
       if (!r.ok) { console.error('❌ Kommo chat Anthropic:', r.status, JSON.stringify(d).slice(0, 300)); return res.status(502).json({ error: (d.error && d.error.message) || 'Error de la IA' }) }
       const usos = (d.content || []).filter(b => b.type === 'tool_use')
       if (d.stop_reason !== 'tool_use' || !usos.length) {
@@ -1530,17 +1556,18 @@ Reglas: usá siempre las herramientas para obtener datos y nunca inventes cifras
         return res.json({ respuesta: texto || 'No pude armar una respuesta.', herramientas: usadas })
       }
       messages.push({ role: 'assistant', content: d.content })
-      const resultados = []
-      for (const u of usos) {
+      const resultados = await Promise.all(usos.map(async u => {
         usadas.push(u.name)
         let contenido, esError = false
-        try { contenido = JSON.stringify(await kommoHerramienta(u.name, u.input)).slice(0, 40000) }
-        catch (e) { contenido = 'Error: ' + e.message; esError = true; console.error('Kommo herramienta', u.name, e.message) }
-        resultados.push({ type: 'tool_result', tool_use_id: u.id, content: contenido, is_error: esError })
-      }
+        try {
+          contenido = JSON.stringify(await conTope(kommoHerramienta(u.name, u.input), quedan() - 10000, 'Esta consulta tardó demasiado y se cortó')).slice(0, 40000)
+          obtenidos.push(u.name + ': ' + contenido)
+        } catch (e) { contenido = 'Error: ' + e.message; esError = true; console.error('Kommo herramienta', u.name, e.message) }
+        return { type: 'tool_result', tool_use_id: u.id, content: contenido, is_error: esError }
+      }))
       messages.push({ role: 'user', content: resultados })
     }
-    res.json({ respuesta: 'La consulta requirió demasiados pasos. Probá con una pregunta más puntual.', herramientas: usadas })
+    res.json({ respuesta: await responderConLoQueHay('demasiados pasos'), parcial: true, herramientas: usadas })
   } catch (e) { console.error('Kommo chat:', e.message); res.status(500).json({ error: e.message }) }
 })
 // ── FIN KOMMO ────────────────────────────────────────────────────────
