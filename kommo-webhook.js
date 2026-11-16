@@ -284,6 +284,7 @@ const montoEntero = m => soloDigitos(String(m || '').split(',')[0])
 function estadoForm(e) {
   if (e === 'APROBADO' || e === 'PREAPROBADO') return 'aprobado'
   if (e === 'DENEGADO') return 'rechazado'
+  if (e === 'REVISAR') return 'rechazado'   // "revisar manualmente" = para el bot es rechazado (queda la nota para el asesor)
   return 'no_consultado'
 }
 
@@ -760,7 +761,7 @@ function registrarKommo(app, pool, buscarEnStock) {
       if (r && r.estado === 'EN_ROBOT') return `${bk.label}: en el robot${auto.robot && !auto.robot.conectado ? ' (la PC robot está apagada)' : ''}`
       if (r && r.estado && r.estado !== 'ERROR') return `${bk.label}: ${r.estado}${r.monto ? ' $' + r.monto : ''}`
       if (r && r.estado === 'ERROR' && (r.intentos || 0) >= MAX_INTENTOS) return `${bk.label}: error (${String(r.error || '').slice(0, 60)})`
-      if (r && r.estado === 'ERROR') return `${bk.label}: falló, se reintenta`
+      if (r && r.estado === 'ERROR') return `${bk.label}: falló, se reintenta${r.error ? ' (' + String(r.error).slice(0, 80) + ')' : ''}`
       if (!bancoCuenta(bk.key, sesiones[bk.key])) return null
       if (!bancoListo(bk.key, sesiones[bk.key])) return `${bk.label}: esperando sesión`
       return `${bk.label}: en cola`
@@ -871,7 +872,7 @@ function registrarKommo(app, pool, buscarEnStock) {
 
         const aprobado = BANCOS.some(b => ar[b.key] && estadoForm(ar[b.key].estado) === 'aprobado')
         const cuentan = BANCOS.filter(b => bancoCuenta(b.key, auto.sesiones[b.key]))
-        const todosRechazan = cuentan.length > 0 && cuentan.every(b => ar[b.key] && ar[b.key].estado === 'DENEGADO')
+        const todosRechazan = cuentan.length > 0 && cuentan.every(b => ar[b.key] && ['DENEGADO', 'REVISAR'].includes(ar[b.key].estado))
 
         // Mientras el robot tenga bancos en curso, se espera (así el resultado llega completo)
         const robotEnCurso = BANCOS.some(b => ar[b.key] && ar[b.key].estado === 'EN_ROBOT')
