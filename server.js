@@ -203,10 +203,10 @@ async function stockArchivarYBorrar(where, params, motivo) {
     [...params, motivo])
   return r.rowCount
 }
-// Antigüedad máxima de CUALQUIER auto del stock. STOCK_MAX_DIAS (por defecto 30; 0 = no borrar nunca).
+// Antigüedad máxima de CUALQUIER auto del stock. STOCK_MAX_DIAS (por defecto 60; 0 = no borrar nunca).
 // STOCK_BASE_FECHA: 'carga' (por defecto, días desde que se cargó) o 'actualizacion' (días desde la última vez que se tocó o se volvió a publicar).
 function stockFechaBase() { return (process.env.STOCK_BASE_FECHA || 'carga') === 'actualizacion' ? 'COALESCE(updated_at, created_at)' : 'created_at' }
-function stockMaxDias() { const d = Number(process.env.STOCK_MAX_DIAS ?? 30); return d >= 1 ? d : 0 }
+function stockMaxDias() { const d = Number(process.env.STOCK_MAX_DIAS ?? 60); return d >= 1 ? d : 0 }
 
 // Limpieza: los avisos cargados desde grupos que nadie volvió a publicar en N días
 // se borran solos (se asume que ya se vendieron). Cambiable con STOCK_GRUPO_DIAS; 0 = no borrar nunca.
@@ -219,6 +219,16 @@ async function limpiarStockViejo() {
     }
     const dias = stockMaxDias()
     if (dias) {
+      // Primero vuelven a la base los autos que se borraron por antigüedad pero todavía NO cumplen el límite actual
+      // (ej.: los que se archivaron cuando el límite era 30 días). Conservan su fecha original de carga.
+      const rc = 'id,marca,modelo,version,anio,km,color,precio,moneda,estado,notas,created_at,updated_at,telefono,origen,ubicacion'
+      const vuelven = await pool.query(
+        `WITH rest AS (DELETE FROM stock_borrado b
+           WHERE b.motivo LIKE 'más de % días en el stock' AND ${stockFechaBase()} >= NOW() - ($1 || ' days')::interval
+             AND NOT EXISTS (SELECT 1 FROM stock s WHERE s.id = b.id)
+           RETURNING ${rc})
+         INSERT INTO stock (${rc}) SELECT ${rc} FROM rest ON CONFLICT (id) DO NOTHING`, [String(dias)])
+      if (vuelven.rowCount > 0) console.log(`[STOCK] ${vuelven.rowCount} autos volvieron a la base: todavía no cumplen ${dias} días`)
       const n = await stockArchivarYBorrar(`${stockFechaBase()} < NOW() - ($1 || ' days')::interval`, [String(dias)], `más de ${dias} días en el stock`)
       if (n > 0) console.log(`[STOCK] Limpieza: ${n} autos con más de ${dias} días en el stock (guardados en la papelera 90 días)`)
     }
@@ -226,6 +236,7 @@ async function limpiarStockViejo() {
   } catch(e) { console.error('[STOCK] Error en limpieza:', e.message) }
 }
 setInterval(limpiarStockViejo, 6 * 60 * 60 * 1000)
+setTimeout(limpiarStockViejo, 20 * 1000)   // al arrancar también: así vuelven enseguida los que se borraron con el límite viejo
 
 // Ver qué se borraría en la próxima limpieza (no borra nada)
 app.get('/api/stock/vencidos', async (req, res) => {
