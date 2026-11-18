@@ -65,6 +65,7 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS auto_permuta TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_garantes TEXT DEFAULT 'no'`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni_garante TEXT DEFAULT ''`).catch(()=>{})
+  await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS sexo TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS nombre_garante TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT ''`).catch(()=>{})
@@ -203,10 +204,10 @@ async function stockArchivarYBorrar(where, params, motivo) {
     [...params, motivo])
   return r.rowCount
 }
-// Antigüedad máxima de CUALQUIER auto del stock. STOCK_MAX_DIAS (por defecto 60; 0 = no borrar nunca).
+// Antigüedad máxima de CUALQUIER auto del stock. STOCK_MAX_DIAS (por defecto 90; 0 = no borrar nunca).
 // STOCK_BASE_FECHA: 'carga' (por defecto, días desde que se cargó) o 'actualizacion' (días desde la última vez que se tocó o se volvió a publicar).
 function stockFechaBase() { return (process.env.STOCK_BASE_FECHA || 'carga') === 'actualizacion' ? 'COALESCE(updated_at, created_at)' : 'created_at' }
-function stockMaxDias() { const d = Number(process.env.STOCK_MAX_DIAS ?? 60); return d >= 1 ? d : 0 }
+function stockMaxDias() { const d = Number(process.env.STOCK_MAX_DIAS ?? 90); return d >= 1 ? d : 0 }
 
 // Limpieza: los avisos cargados desde grupos que nadie volvió a publicar en N días
 // se borran solos (se asume que ya se vendieron). Cambiable con STOCK_GRUPO_DIAS; 0 = no borrar nunca.
@@ -1010,21 +1011,32 @@ app.get('/api/clientes', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
+// Calificación automática: arma el CUIL (DNI + sexo) y abre el pedido en los bancos. No frena la respuesta al cliente.
+function calificarTarjeta(p) {
+  try {
+    if (!kommoMod.calificarCliente) return
+    kommoMod.calificarCliente(p).then(r => { if (r && r.ok === false && r.motivo !== 'apagado' && r.motivo !== 'sin_dni') console.log('[auto-calificar] no se pudo:', r.motivo) })
+      .catch(e => console.error('[auto-calificar]', e.message))
+  } catch (e) { console.error('[auto-calificar]', e.message) }
+}
+
 // ── Clientes busqueda: guardar ───────────────────────────────
 app.post('/api/clientes', async (req, res) => {
   try {
     const {
       nombre, telefono='', marca='', modelo, anio='', presupuesto='', notas='', asesor='',
-      dni='', tiene_permuta='no', auto_permuta='', tiene_garantes='no', nombre_garante='', dni_garante=''
+      dni='', tiene_permuta='no', auto_permuta='', tiene_garantes='no', nombre_garante='', dni_garante='', sexo=''
     } = req.body
     if (!nombre || !modelo) return res.status(400).json({ error: 'Nombre y modelo requeridos' })
     const ins = await pool.query(
       `INSERT INTO clientes_busqueda
-       (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor,dni,tiene_permuta,auto_permuta,tiene_garantes,nombre_garante,dni_garante)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+       (nombre,telefono,marca,modelo,anio,presupuesto,notas,asesor,dni,tiene_permuta,auto_permuta,tiene_garantes,nombre_garante,dni_garante,sexo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
       [nombre, telefono, marca, modelo, String(anio), String(presupuesto), notas, asesor,
-       dni, tiene_permuta, auto_permuta, tiene_garantes, nombre_garante, dni_garante]
+       dni, tiene_permuta, auto_permuta, tiene_garantes, nombre_garante, dni_garante, String(sexo || '')]
     )
+    // Calificación automática en los bancos apenas se carga la tarjeta (si trae DNI)
+    if (dni) calificarTarjeta({ clienteId: ins.rows[0].id, nombre, dni, sexo, modelo, anio, telefono })
     // Buscar si hay match en stock
     const stockMatch = await pool.query(
       `SELECT * FROM stock WHERE (LOWER(modelo) LIKE LOWER($1) OR LOWER(marca) LIKE LOWER($1)) ${anio ? 'AND anio=$2' : ''}`,
@@ -1032,6 +1044,19 @@ app.post('/api/clientes', async (req, res) => {
     )
     res.json({ ok: true, id: ins.rows[0] && ins.rows[0].id, matches: stockMatch.rows })
   } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// Calificar a mano (botón): arma el CUIL y abre el pedido en los bancos
+app.post('/api/clientes/:id/calificar', async (req, res) => {
+  try {
+    const q = await pool.query('SELECT id,nombre,dni,sexo,modelo,anio,telefono,vendedor FROM clientes_busqueda WHERE id=$1', [req.params.id])
+    if (!q.rows.length) return res.status(404).json({ error: 'No existe el cliente' })
+    const c = q.rows[0]
+    const sexo = (req.body && req.body.sexo) || c.sexo
+    if (req.body && req.body.sexo) await pool.query('UPDATE clientes_busqueda SET sexo=$1 WHERE id=$2', [String(req.body.sexo), c.id])
+    const r = await kommoMod.calificarCliente({ clienteId: c.id, nombre: c.nombre, dni: c.dni, sexo, modelo: c.modelo, anio: c.anio, telefono: c.telefono, vendedor: c.vendedor })
+    res.json(r)
+  } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // ── Clientes busqueda: eliminar ──────────────────────────────
@@ -1046,7 +1071,7 @@ app.delete('/api/clientes/:id', async (req, res) => {
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
     const campos = ['estado','vendedor','calificacion','observaciones','estado_lead','motivo_perdida','bancos','monto_galicia','monto_bancor','monto_nacion','monto_santander','monto_mg',
-      'nombre','telefono','dni','modelo','anio','presupuesto','tiene_permuta','auto_permuta','tiene_garantes','nombre_garante','dni_garante','notas']
+      'nombre','telefono','dni','sexo','modelo','anio','presupuesto','tiene_permuta','auto_permuta','tiene_garantes','nombre_garante','dni_garante','notas']
     const sets = []
     const params = []
     campos.forEach(campo => {
@@ -1059,6 +1084,12 @@ app.patch('/api/clientes/:id', async (req, res) => {
     sets.push('updated_at=NOW()')
     params.push(req.params.id)
     const upd = await pool.query('UPDATE clientes_busqueda SET ' + sets.join(',') + ' WHERE id=$' + params.length, params)
+    // si se cargó/cambió el DNI, se califica solo (si la tarjeta todavía no tiene pedido)
+    if (upd.rowCount && (req.body.dni !== undefined || req.body.sexo !== undefined)) {
+      pool.query('SELECT id,nombre,dni,sexo,modelo,anio,telefono,vendedor FROM clientes_busqueda WHERE id=$1', [req.params.id])
+        .then(q => { const c = q.rows[0]; if (c && c.dni) calificarTarjeta({ clienteId: c.id, nombre: c.nombre, dni: c.dni, sexo: c.sexo, modelo: c.modelo, anio: c.anio, telefono: c.telefono, vendedor: c.vendedor }) })
+        .catch(() => {})
+    }
     res.json({ ok: true, updated: upd.rowCount })
   } catch(e) { res.status(500).json({ error: e.message }) }
 })
@@ -1279,7 +1310,8 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
 // ── FIN VENDEDORES ────────────────────────────────────────────────────────────
 
 // ── KOMMO: webhook para pedir autos y calificar clientes por banco ───────────
-require('./kommo-webhook')(app, pool, buscarEnStock)
+const kommoMod = require('./kommo-webhook')
+kommoMod(app, pool, buscarEnStock)
 
 // ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
 // Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
