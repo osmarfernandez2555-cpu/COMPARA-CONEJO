@@ -31,9 +31,6 @@
 //    CONSULTA_BANCOS_CLAVE    el código de acceso de Consulta Créditos (APP_CLAVE)   [para la consulta automática]
 //    CONSULTA_BANCOS_URL      def: https://consulta-bancor-production.up.railway.app
 //    CONSULTA_AUTOMATICA      "no" para apagarla (def: prendida si hay clave)
-//    CONSULTA_ROBOT_CLAVE     la ROBOT_CLAVE de Consulta Créditos. Con esto, los bancos que se consultan con la
-//                             extensión de Chrome (Galicia, Santander, decreditos) los consulta la PC robot
-//                             (la app abierta en …/?robot=1). Sin esto, esos bancos quedan para hacer a mano.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const fetch = require('node-fetch')
@@ -43,8 +40,7 @@ const BANCOS = [
   { key: 'bancor',     label: 'Bancor',      monto: 'monto_bancor' },
   { key: 'nacion',     label: 'Nación',      monto: 'monto_nacion' },
   { key: 'galicia',    label: 'Galicia',     monto: 'monto_galicia' },
-  { key: 'decreditos', label: 'decreditos',  monto: null },
-  { key: 'santander',  label: 'Santander',   monto: 'monto_santander' }
+  { key: 'decreditos', label: 'decreditos',  monto: null }
 ]
 
 // ── utilidades ─────────────────────────────────────────────────────────────
@@ -63,6 +59,40 @@ function validarCuil(cuil) {
 
 function formatearCuil(c) {
   return c.length === 11 ? `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}` : c
+}
+
+
+// ── CUIL a partir de DNI + sexo (regla de AFIP) ──────────────────────────────
+//   hombre → 20, mujer → 27; si el dígito verificador da 10, el prefijo pasa a 23 y se recalcula
+function cuilDesdeDni(dni, sexo) {
+  const d = soloDigitos(dni)
+  if (d.length < 7 || d.length > 8) return ''
+  const num = d.padStart(8, '0')
+  const w = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+  const calc = pre => { const b = pre + num; const r = 11 - (w.reduce((a, x, i) => a + x * Number(b[i]), 0) % 11); return r === 11 ? 0 : r }
+  let pre = sexo === 'F' ? '27' : '20'
+  let dv = calc(pre)
+  if (dv === 10) { pre = '23'; dv = calc(pre) }
+  return pre + num + dv
+}
+function normalizarSexo(v) {
+  const t = String(v || '').trim().toLowerCase()
+  if (/^(f|femenino|mujer|female|ella)$/.test(t)) return 'F'
+  if (/^(m|masculino|hombre|varon|varón|male|el)$/.test(t)) return 'M'
+  return ''
+}
+// Si el bot no pudo deducir el sexo por la charla, se intenta con el nombre de pila
+const NOMBRES_F = new Set(('maria ana laura carolina florencia lucia sofia valeria natalia romina gabriela claudia silvia patricia mariana paula veronica andrea camila julieta agustina micaela belen daniela vanesa vanessa noelia sandra marta graciela susana alejandra cecilia celeste carla soledad lorena yamila jazmin milagros rocio ayelen lucrecia analia elena rosa norma liliana monica adriana fernanda marcela cintia cynthia melina brenda antonella candela maite mercedes ines beatriz carmen luz sol miriam ariana abril delfina emilia guadalupe isabel josefina karina leticia magali mara nadia olga pilar rita ruth sabrina stella tamara teresa victoria viviana yesica zoe').split(' '))
+const NOMBRES_M = new Set(('juan jose carlos luis miguel jorge pedro marcos martin diego javier fernando sergio daniel ricardo roberto eduardo gustavo pablo matias nicolas lucas facundo agustin santiago mateo tomas franco gonzalo ezequiel ramiro leandro alejandro cristian maximiliano hernan ariel walter hugo oscar raul rodrigo federico emiliano ivan damian julio cesar mario nestor ruben omar claudio osvaldo leonardo lautaro joaquin benjamin bruno dante enzo gaston horacio jonatan lisandro marcelo mauro nahuel ramon sebastian thiago ulises victor david adrian alberto andres antonio armando bautista cristobal edgardo emanuel esteban fabian felipe gerardo guillermo hector ignacio jeremias kevin luciano manuel marcelo patricio rafael ricardo salvador tobias valentin').split(' '))
+function inferirSexo(nombre) {
+  const n = String(nombre || '').trim().split(/\s+/)[0] || ''
+  const t = n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '')
+  if (t.length < 3) return ''
+  if (NOMBRES_F.has(t)) return 'F'
+  if (NOMBRES_M.has(t)) return 'M'
+  if (/(luca|nicola|joshua|bautista)$/.test(t)) return 'M'
+  if (/a$/.test(t)) return 'F'
+  return ''
 }
 
 // separa "Gol Trend 2015" en { modelo: "Gol Trend", anio: "2015" }
@@ -263,28 +293,12 @@ async function bancosApi(ruta, opts = {}) {
   if (r.status === 401) throw new Error('El código de Consulta Créditos (CONSULTA_BANCOS_CLAVE) es incorrecto')
   return { ok: r.ok, status: r.status, data }
 }
-// Robot de Consulta Créditos (PC de la oficina con la extensión): consulta Galicia, Santander y decreditos
-function robotClave() { return String(process.env.CONSULTA_ROBOT_CLAVE || '').trim() }
-async function robotApi(ruta, opts = {}) {
-  const sep = ruta.includes('?') ? '&' : '?'
-  const r = await fetch(bancosUrl() + ruta + sep + 'clave=' + encodeURIComponent(robotClave()), {
-    method: opts.method || 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-    timeout: opts.timeout || 20000
-  })
-  let data = {}
-  try { data = await r.json() } catch (e) { data = {} }
-  if (r.status === 401) throw new Error('La clave del robot (CONSULTA_ROBOT_CLAVE) no coincide con ROBOT_CLAVE de Consulta Créditos')
-  return { ok: r.ok, status: r.status, data }
-}
 // "30.868.289,50" → "30868289"
 const montoEntero = m => soloDigitos(String(m || '').split(',')[0])
 // APROBADO / PREAPROBADO / DENEGADO / REVISAR / ERROR  →  estado del formulario
 function estadoForm(e) {
   if (e === 'APROBADO' || e === 'PREAPROBADO') return 'aprobado'
   if (e === 'DENEGADO') return 'rechazado'
-  if (e === 'REVISAR') return 'rechazado'   // "revisar manualmente" = para el bot es rechazado (queda la nota para el asesor)
   return 'no_consultado'
 }
 
@@ -733,35 +747,28 @@ function registrarKommo(app, pool, buscarEnStock) {
   // ═════════════════════════════════════════════════════════════════════════
   //  CONSULTA AUTOMÁTICA en Consulta Créditos mientras las sesiones estén abiertas
   // ═════════════════════════════════════════════════════════════════════════
-  const auto = { corriendo: false, ultimoChequeo: null, sesiones: {}, robot: null, error: '', consultandoAhora: '' }
+  const auto = { corriendo: false, ultimoChequeo: null, sesiones: {}, error: '', consultandoAhora: '' }
   const MAX_INTENTOS = 2
-  // Si el robot no devuelve un banco en este tiempo, cuenta como error (y se reintenta)
-  const ROBOT_MAX_MIN = Math.max(5, Number(process.env.CONSULTA_ROBOT_MAX_MIN || 20))
 
-  // Bancos que se consultan con la extensión de Chrome: los hace la PC robot (si está configurada)
-  function porRobot(id, s) {
-    return !!s && s.modo === 'extension' && !!robotClave() && !!(auto.robot && auto.robot.configurado)
-  }
   function bancoListo(id, s) {
     if (!s) return false
-    if (s.modo === 'extension') return porRobot(id, s)   // la extensión solo corre en el navegador: va por el robot
+    if (id === 'decreditos' && s.modo === 'extension') return false   // la extensión solo corre en el navegador
     return s.estado === 'conectado'
   }
   // bancos que hay que esperar para poder decir "no califica" (los que no están configurados no cuentan)
   function bancoCuenta(id, s) {
     if (!s) return true
     if (s.estado === 'no_configurado') return false
-    if (s.modo === 'extension') return porRobot(id, s)
+    if (id === 'decreditos' && s.modo === 'extension') return false
     return true
   }
 
   function resumenAuto(ar, sesiones) {
     return BANCOS.map(bk => {
       const r = ar[bk.key]
-      if (r && r.estado === 'EN_ROBOT') return `${bk.label}: en el robot${auto.robot && !auto.robot.conectado ? ' (la PC robot está apagada)' : ''}`
       if (r && r.estado && r.estado !== 'ERROR') return `${bk.label}: ${r.estado}${r.monto ? ' $' + r.monto : ''}`
       if (r && r.estado === 'ERROR' && (r.intentos || 0) >= MAX_INTENTOS) return `${bk.label}: error (${String(r.error || '').slice(0, 60)})`
-      if (r && r.estado === 'ERROR') return `${bk.label}: falló, se reintenta${r.error ? ' (' + String(r.error).slice(0, 80) + ')' : ''}`
+      if (r && r.estado === 'ERROR') return `${bk.label}: falló, se reintenta`
       if (!bancoCuenta(bk.key, sesiones[bk.key])) return null
       if (!bancoListo(bk.key, sesiones[bk.key])) return `${bk.label}: esperando sesión`
       return `${bk.label}: en cola`
@@ -796,7 +803,6 @@ function registrarKommo(app, pool, buscarEnStock) {
       const est = await bancosApi('/api/estado')
       if (!est.ok) throw new Error('Consulta Créditos respondió ' + est.status)
       auto.sesiones = (est.data && est.data.sesiones) || {}
-      auto.robot = (est.data && est.data.robot) || null
       auto.ultimoChequeo = new Date().toISOString()
       auto.error = ''
 
@@ -804,51 +810,11 @@ function registrarKommo(app, pool, buscarEnStock) {
         `SELECT * FROM calificaciones_kommo WHERE estado IN ('pendiente','en_proceso') AND LENGTH(cuil)=11 ORDER BY created_at ASC LIMIT 10`)
       for (const sol of pedidos.rows) {
         const ar = sol.auto_resultados || {}
-        const ahora = () => new Date().toISOString()
-        const pendienteK = k => { const r = ar[k]; return !r || (r.estado === 'ERROR' && (r.intentos || 0) < MAX_INTENTOS) }
-        const errorK = (k, error) => ({ estado: 'ERROR', error, intentos: ((ar[k] && ar[k].intentos) || 0) + 1, fecha: ahora() })
-
-        // 1) Bancos de la extensión → se los pide al robot de Consulta Créditos (una sola vez por pedido)
-        const faltanRobot = BANCOS.map(b => b.key).filter(k => pendienteK(k) && porRobot(k, auto.sesiones[k]))
-        if (faltanRobot.length) {
-          try {
-            const r = await robotApi('/api/robot/consultar', { method: 'POST', body: { cuit: sol.cuil, bancos: faltanRobot.join(',') } })
-            if (r.ok && r.data && r.data.id) {
-              faltanRobot.forEach(k => { ar[k] = { estado: 'EN_ROBOT', robotId: String(r.data.id), desde: ahora(), intentos: (ar[k] && ar[k].intentos) || 0 } })
-              console.log(`[auto-bancos] pedido ${sol.id} · CUIL ${sol.cuil} → robot (${faltanRobot.join(', ')})`)
-            } else faltanRobot.forEach(k => { ar[k] = errorK(k, (r.data && r.data.error) || ('HTTP ' + r.status)) })
-          } catch (e) { faltanRobot.forEach(k => { ar[k] = errorK(k, e.message) }) }
-          if (sol.estado === 'pendiente') {
-            await pool.query(`UPDATE calificaciones_kommo SET estado='en_proceso', tomado_por='Ruthina (automático)' WHERE id=$1 AND estado='pendiente'`, [sol.id])
-          }
-          await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones))
-        }
-
-        // 2) Lo que ya terminó el robot
-        const idsRobot = [...new Set(BANCOS.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT').map(k => ar[k].robotId))]
-        for (const rid of idsRobot) {
-          const ks = BANCOS.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT' && ar[k].robotId === rid)
-          try {
-            const r = await robotApi('/api/robot/resultado?id=' + encodeURIComponent(rid))
-            if (r.status === 404) { ks.forEach(k => { ar[k] = errorK(k, 'Consulta Créditos se reinició y perdió el pedido') }); continue }
-            if (r.ok && r.data && r.data.estado === 'listo') {
-              ks.forEach(k => {
-                const x = (r.data.resultados || []).find(z => z.banco === k)
-                if (!x) ar[k] = errorK(k, 'el robot no consultó este banco')
-                else if (x.estado === 'ERROR') ar[k] = errorK(k, x.resumen || 'error en el robot')
-                else ar[k] = { estado: x.estado, monto: x.monto || '', cliente: x.cliente || '', resumen: x.resumen || x.nota || '', fecha: ahora(), robot: true }
-              })
-              console.log(`[auto-bancos] pedido ${sol.id} · robot listo: ${ks.map(k => k + ' ' + ar[k].estado).join(', ')}`)
-            } else {
-              // sigue en la fila del robot: si pasó demasiado tiempo, cuenta como error y se reintenta
-              ks.forEach(k => { if (Date.now() - new Date(ar[k].desde).getTime() > ROBOT_MAX_MIN * 60000) ar[k] = errorK(k, 'el robot no respondió a tiempo') })
-            }
-          } catch (e) { /* sin conexión: se vuelve a mirar en la próxima vuelta */ }
-        }
-        if (idsRobot.length) await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones))
-
-        // 3) Bancos con sesión en el servidor (Bancor, Nación): se consultan directo, como siempre
-        const faltan = BANCOS.map(b => b.key).filter(k => pendienteK(k) && bancoListo(k, auto.sesiones[k]) && !porRobot(k, auto.sesiones[k]))
+        const faltan = BANCOS.map(b => b.key).filter(k => {
+          const r = ar[k]
+          const pendiente = !r || (r.estado === 'ERROR' && (r.intentos || 0) < MAX_INTENTOS)
+          return pendiente && bancoListo(k, auto.sesiones[k])
+        })
 
         if (faltan.length) {
           if (sol.estado === 'pendiente') {
@@ -872,11 +838,9 @@ function registrarKommo(app, pool, buscarEnStock) {
 
         const aprobado = BANCOS.some(b => ar[b.key] && estadoForm(ar[b.key].estado) === 'aprobado')
         const cuentan = BANCOS.filter(b => bancoCuenta(b.key, auto.sesiones[b.key]))
-        const todosRechazan = cuentan.length > 0 && cuentan.every(b => ar[b.key] && ['DENEGADO', 'REVISAR'].includes(ar[b.key].estado))
+        const todosRechazan = cuentan.length > 0 && cuentan.every(b => ar[b.key] && ar[b.key].estado === 'DENEGADO')
 
-        // Mientras el robot tenga bancos en curso, se espera (así el resultado llega completo)
-        const robotEnCurso = BANCOS.some(b => ar[b.key] && ar[b.key].estado === 'EN_ROBOT')
-        if ((aprobado || todosRechazan) && !robotEnCurso) {
+        if (aprobado || todosRechazan) {
           const entrada = {}
           BANCOS.forEach(b => {
             const r = ar[b.key]
@@ -893,7 +857,7 @@ function registrarKommo(app, pool, buscarEnStock) {
           // queda abierto con lo que se sabe; si nadie lo está consultando, vuelve a pendiente para un vendedor
           const msg = resumenAuto(ar, auto.sesiones)
           await guardarAuto(sol.id, ar, msg)
-          if (actual.rows[0].tomado_por === 'Ruthina (automático)' && !robotEnCurso) {
+          if (actual.rows[0].tomado_por === 'Ruthina (automático)') {
             await pool.query(`UPDATE calificaciones_kommo SET estado='pendiente', tomado_por='' WHERE id=$1 AND tomado_por='Ruthina (automático)'`, [sol.id])
           }
         }
@@ -910,18 +874,61 @@ function registrarKommo(app, pool, buscarEnStock) {
   setTimeout(cicloAuto, 8000)
   registrarKommo.cicloAuto = cicloAuto
 
+  // ═════════════════════════════════════════════════════════════════════════
+  //  CALIFICAR SOLO a un cliente cuando se carga su tarjeta en Ruthina
+  //  Con el DNI + el sexo (que el bot saca de la charla) se arma el CUIL y se abre
+  //  el pedido de calificación; la consulta automática lo resuelve y actualiza la tarjeta.
+  //  Se apaga con CALIFICAR_AUTO=no
+  // ═════════════════════════════════════════════════════════════════════════
+  async function notaEnTarjeta(clienteId, texto) {
+    if (!clienteId) return
+    await pool.query(
+      `UPDATE clientes_busqueda SET observaciones=TRIM(BOTH E'\\n' FROM COALESCE(observaciones,'') || E'\\n' || $1), updated_at=NOW() WHERE id=$2`,
+      [texto, clienteId]).catch(e => console.error('[auto-calificar] nota:', e.message))
+  }
+  async function calificarCliente(p) {
+    if (/^(no|false|0)$/i.test(String(process.env.CALIFICAR_AUTO || ''))) return { ok: false, motivo: 'apagado' }
+    const dni = soloDigitos(p.dni)
+    if (dni.length < 7) return { ok: false, motivo: 'sin_dni' }
+    if (dni.length > 8 && dni.length !== 11) return { ok: false, motivo: 'dni_invalido' }
+    // no repetir: si esta tarjeta ya tiene un pedido de calificación, no se abre otro
+    if (p.clienteId) {
+      const ex = await pool.query(`SELECT id, estado FROM calificaciones_kommo WHERE cliente_id=$1 ORDER BY created_at DESC LIMIT 1`, [p.clienteId])
+      if (ex.rows.length) return { ok: true, ya_existia: true, solicitud_id: ex.rows[0].id }
+    }
+    let cuil, sexo = '', via = ''
+    if (dni.length === 11) { cuil = dni; via = 'CUIL cargado' }
+    else {
+      sexo = normalizarSexo(p.sexo); via = 'sexo deducido de la charla'
+      if (!sexo) { sexo = inferirSexo(p.nombre); via = 'sexo deducido por el nombre' }
+      if (!sexo) {
+        await notaEnTarjeta(p.clienteId, '🏦 No se calificó solo: no se pudo saber si es hombre o mujer para armar el CUIL. Cargá el CUIL completo en el campo DNI (11 números).')
+        return { ok: false, motivo: 'sin_sexo' }
+      }
+      cuil = cuilDesdeDni(dni, sexo)
+    }
+    const r = await procesarPedido({
+      cuil, auto: p.modelo || '', anio: p.anio || '', nombre: p.nombre || '', telefono: p.telefono || '',
+      vendedor: p.vendedor || '', origen: 'ruthina-auto', sinAuto: true
+    })
+    if (p.clienteId && r.solicitud) await pool.query(`UPDATE calificaciones_kommo SET cliente_id=$1 WHERE id=$2`, [p.clienteId, r.solicitud.id])
+    await notaEnTarjeta(p.clienteId, `🏦 Calificación automática pedida — CUIL ${formatearCuil(cuil)}${sexo ? ' (' + (sexo === 'F' ? 'mujer' : 'hombre') + ', ' + via + ')' : ''}. ` +
+      (autoActiva() ? 'Ruthina consulta los bancos y deja el resultado acá.' : 'Pendiente en Pedidos Kommo (la consulta automática está apagada).') +
+      (sexo && via.includes('nombre') ? ' ⚠️ Verificá el CUIL: el sexo se dedujo por el nombre.' : ''))
+    console.log(`[auto-calificar] cliente ${p.clienteId || '-'} → CUIL ${cuil} (${via})`)
+    return { ok: true, solicitud_id: r.solicitud && r.solicitud.id, cuil }
+  }
+  registrarKommo.calificarCliente = calificarCliente
+
   // estado de la consulta automática (lo muestra el panel)
   app.get('/api/calificaciones/auto', (req, res) => {
     const sesiones = {}
     BANCOS.forEach(b => {
       const s = auto.sesiones[b.key]
-      sesiones[b.key] = !s ? 'desconocido'
-        : s.modo === 'extension' ? (porRobot(b.key, s) ? (auto.robot && auto.robot.conectado ? 'robot' : 'robot_apagado') : 'extension')
-        : s.estado
+      sesiones[b.key] = !s ? 'desconocido' : (b.key === 'decreditos' && s.modo === 'extension') ? 'extension' : s.estado
     })
     res.json({ activa: autoActiva(), url: bancosUrl(), ultimo_chequeo: auto.ultimoChequeo, error: auto.error,
-               consultando: auto.consultandoAhora, sesiones,
-               robot: auto.robot ? { configurado: !!auto.robot.configurado && !!robotClave(), conectado: !!auto.robot.conectado, enCola: auto.robot.enCola || 0 } : null })
+               consultando: auto.consultandoAhora, sesiones })
   })
 
   // volver a consultar automáticamente un pedido (borra lo que se sabía)
@@ -1007,7 +1014,7 @@ function registrarKommo(app, pool, buscarEnStock) {
   // arma la respuesta de calificación para el bot a partir del pedido guardado
   // Respuesta para el bot: trae los montos para uso interno del bot,
   // pero mensaje_cliente NUNCA los menciona (solo nombra los bancos que aprobaron).
-  const NOMBRE_BANCO = { bancor: 'Bancor', nacion: 'Banco Nación', galicia: 'Banco Galicia', decreditos: 'decreditos', santander: 'Santander' }
+  const NOMBRE_BANCO = { bancor: 'Bancor', nacion: 'Banco Nación', galicia: 'Banco Galicia', decreditos: 'decreditos' }
   function listaBancos(nombres) {
     if (nombres.length <= 1) return nombres.join('')
     return nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1]
