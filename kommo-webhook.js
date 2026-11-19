@@ -936,14 +936,51 @@ function registrarKommo(app, pool, buscarEnStock) {
       const s = auto.sesiones[b.key]
       sesiones[b.key] = !s ? 'desconocido' : (b.key === 'decreditos' && s.modo === 'extension') ? 'extension' : s.estado
     })
-    res.json({ activa: autoActiva(), url: bancosUrl(), ultimo_chequeo: auto.ultimoChequeo, error: auto.error,
-               consultando: auto.consultandoAhora, sesiones })
+    extensionesEstado().then(extensiones => {
+      res.json({ activa: autoActiva(), url: bancosUrl(), ultimo_chequeo: auto.ultimoChequeo, error: auto.error,
+                 consultando: auto.consultandoAhora, sesiones, extensiones })
+    }).catch(() => res.json({ activa: autoActiva(), url: bancosUrl(), ultimo_chequeo: auto.ultimoChequeo, error: auto.error,
+                 consultando: auto.consultandoAhora, sesiones, extensiones: [] }))
+  })
+
+  // ── PC "robot" con las extensiones de Chrome: la extensión avisa cada ~30 s que está viva ──
+  //    POST /api/extension/latido   (header x-clave = CONSULTA_BANCOS_CLAVE)
+  //    { "pc": "Oficina", "bancos": ["galicia","decreditos"], "version": "1.2", "detalle": "texto opcional" }
+  const EXTENSION_TIMEOUT_SEG = Math.max(30, Number(process.env.EXTENSION_TIMEOUT_SEG || 90))
+  pool.query(`CREATE TABLE IF NOT EXISTS extension_latidos (
+    pc TEXT PRIMARY KEY, bancos JSONB DEFAULT '[]'::jsonb, version TEXT DEFAULT '', detalle TEXT DEFAULT '', visto TIMESTAMP DEFAULT NOW())`)
+    .catch(e => console.error('extension_latidos:', e.message))
+  async function extensionesEstado() {
+    const r = await pool.query(`SELECT pc, bancos, version, detalle, visto, EXTRACT(EPOCH FROM (NOW() - visto))::int AS segundos FROM extension_latidos ORDER BY pc`)
+    return r.rows.map(x => ({ pc: x.pc, bancos: x.bancos || [], version: x.version, detalle: x.detalle, visto: x.visto, segundos: x.segundos,
+                              conectada: x.segundos <= EXTENSION_TIMEOUT_SEG }))
+  }
+  app.post('/api/extension/latido', express.json(), async (req, res) => {
+    try {
+      const clave = String(process.env.CONSULTA_BANCOS_CLAVE || '').trim()
+      if (!clave || String(req.get('x-clave') || req.query.clave || '').trim() !== clave) return res.status(401).json({ ok: false, error: 'Clave incorrecta' })
+      const b = req.body || {}
+      const pc = String(b.pc || 'PC').trim().slice(0, 60) || 'PC'
+      await pool.query(
+        `INSERT INTO extension_latidos (pc, bancos, version, detalle, visto) VALUES ($1,$2,$3,$4,NOW())
+         ON CONFLICT (pc) DO UPDATE SET bancos=EXCLUDED.bancos, version=EXCLUDED.version, detalle=EXCLUDED.detalle, visto=NOW()`,
+        [pc, JSON.stringify(Array.isArray(b.bancos) ? b.bancos.slice(0, 10) : []), String(b.version || '').slice(0, 30), String(b.detalle || '').slice(0, 200)])
+      res.json({ ok: true })
+    } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+  })
+  app.get('/api/extension/estado', async (req, res) => {
+    try { res.json({ extensiones: await extensionesEstado() }) } catch (e) { res.status(500).json({ error: e.message }) }
   })
 
   // volver a consultar automáticamente un pedido (borra lo que se sabía)
   app.post('/api/calificaciones/:id/reconsultar', async (req, res) => {
     try {
-      await pool.query(`UPDATE calificaciones_kommo SET auto_resultados='{}'::jsonb, auto_msg='' WHERE id=$1 AND estado IN ('pendiente','en_proceso')`, [req.params.id])
+      // si ya estaba resuelto se REABRE: se borra el resultado y se vuelve a consultar en los bancos (el reloj de 5 min arranca de nuevo)
+      const up = await pool.query(
+        `UPDATE calificaciones_kommo SET estado='pendiente', tomado_por='', resultados='{}'::jsonb, resultado='', observaciones='', resuelto_por='',
+           kommo_error='', resuelto_at=NULL, auto_resultados='{}'::jsonb, auto_msg='', updated_at=NOW()
+         WHERE id=$1 AND estado <> 'descartado' RETURNING id`, [req.params.id])
+      if (!up.rows.length) return res.status(404).json({ error: 'No existe o está descartado' })
       setTimeout(cicloAuto, 200)
       res.json({ ok: true })
     } catch (e) { res.status(500).json({ error: e.message }) }
