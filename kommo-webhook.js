@@ -40,7 +40,7 @@ const BANCOS = [
   { key: 'bancor',     label: 'Bancor',      monto: 'monto_bancor' },
   { key: 'nacion',     label: 'Nación',      monto: 'monto_nacion' },
   { key: 'galicia',    label: 'Galicia',     monto: 'monto_galicia' },
-  { key: 'decreditos', label: 'decreditos',  monto: null }
+  { key: 'decreditos', label: 'decreditos',  monto: 'monto_decreditos' }
 ]
 
 // ── utilidades ─────────────────────────────────────────────────────────────
@@ -336,6 +336,13 @@ function registrarKommo(app, pool, buscarEnStock) {
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS auto_msg TEXT DEFAULT ''`).catch(() => {})
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS callback_url TEXT DEFAULT ''`).catch(() => {})
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT ''`).catch(() => {})
+    // rol del pedido: 'titular' (el cliente) o 'garante' (cotitular / segundo DNI)
+    await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS rol TEXT DEFAULT 'titular'`).catch(() => {})
+    for (const col of ['monto_decreditos', 'gar_galicia', 'gar_bancor', 'gar_nacion', 'gar_santander', 'gar_decreditos', 'gar_bancos', 'gar_cuil']) {
+      await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`).catch(() => {})
+    }
+    // lo que antes se cargaba en "MG" pasa a decreditos
+    await pool.query(`UPDATE clientes_busqueda SET monto_decreditos = monto_mg WHERE COALESCE(monto_decreditos,'')='' AND COALESCE(monto_mg,'')<>''`).catch(() => {})
     console.log('✅ Webhook Kommo listo: POST /api/kommo/webhook?key=***  (Kommo API ' + (kommoListo() ? 'configurada' : 'SIN configurar') + ')')
     console.log('🏦 Consulta automática de bancos: ' + (autoActiva() ? 'PRENDIDA → ' + bancosUrl() : 'apagada (falta CONSULTA_BANCOS_CLAVE)'))
   })().catch(e => console.error('Error init Kommo:', e.message))
@@ -405,7 +412,7 @@ function registrarKommo(app, pool, buscarEnStock) {
     const cuilValido = cuil.length === 11 && validarCuil(cuil)
 
     const autos = modelo ? await buscarAutos(modelo, anio) : []
-    const clienteId = crearLeads() ? await guardarCliente(pedido) : null
+    const clienteId = (crearLeads() && !p.sinCliente) ? await guardarCliente(pedido) : null
 
     // evitar duplicados: si ya hay un pedido abierto para este CUIL, se reutiliza
     let sol = await pool.query(
@@ -432,6 +439,7 @@ function registrarKommo(app, pool, buscarEnStock) {
     } else if (p.origen) {
       sol = await pool.query(`UPDATE calificaciones_kommo SET origen=$1 WHERE id=$2 RETURNING *`, [p.origen, sol.rows[0].id])
     }
+    if (p.rol) sol = await pool.query(`UPDATE calificaciones_kommo SET rol=$1 WHERE id=$2 RETURNING *`, [p.rol, sol.rows[0].id])
     const solicitud = sol.rows[0]
     if (autoActiva() && cuil.length === 11) setTimeout(() => registrarKommo.cicloAuto && registrarKommo.cicloAuto(), 500)
 
@@ -693,18 +701,21 @@ function registrarKommo(app, pool, buscarEnStock) {
       `\n${lineas.join('\n')}` + (obs ? `\n📝 ${obs}` : '') +
       (automatico ? '\n🤖 Consultado automáticamente por Ruthina' : (quien ? `\n👤 Consultó: ${quien}` : ''))
 
-    // actualizar el cliente en Ruthina
+    // actualizar el cliente en Ruthina (el titular en sus casilleros; el garante en los suyos)
+    const esGarante = sol.rol === 'garante'
     if (sol.cliente_id) {
       const sets = [], params = []
       BANCOS.forEach(bk => {
         if (bk.monto && resultados[bk.key].estado === 'aprobado' && resultados[bk.key].monto) {
-          params.push(resultados[bk.key].monto); sets.push(`${bk.monto}=$${params.length}`)
+          params.push(resultados[bk.key].monto); sets.push(`${esGarante ? 'gar_' + bk.key : bk.monto}=$${params.length}`)
         }
       })
-      params.push(aprobados.map(x => x.label).join(', ')); sets.push(`bancos=$${params.length}`)
-      if (califica) { params.push('sirve'); sets.push(`calificacion=$${params.length}`) }
-      else if (automatico && consultados.length) { params.push('no_sirve'); sets.push(`calificacion=$${params.length}`) }
-      const nota = `[Bancos ${new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}] ` +
+      params.push(aprobados.map(x => x.label).join(', ')); sets.push(`${esGarante ? 'gar_bancos' : 'bancos'}=$${params.length}`)
+      if (!esGarante) {
+        if (califica) { params.push('sirve'); sets.push(`calificacion=$${params.length}`) }
+        else if (automatico && consultados.length) { params.push('no_sirve'); sets.push(`calificacion=$${params.length}`) }
+      }
+      const nota = `[${esGarante ? 'Garante ' + formatearCuil(sol.cuil) + ' · bancos' : 'Bancos'} ${new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}] ` +
         (califica ? 'Califica: ' + aprobados.map(x => x.label).join(', ') : !consultados.length ? 'Sin respuesta de los bancos en el tiempo límite' : 'No califica en: ' + consultados.map(x => x.label).join(', ')) + (obs ? ' — ' + obs : '')
       params.push(nota); sets.push(`observaciones=TRIM(BOTH E'\\n' FROM COALESCE(observaciones,'') || E'\\n' || $${params.length})`)
       params.push(sol.cliente_id)
@@ -714,7 +725,7 @@ function registrarKommo(app, pool, buscarEnStock) {
 
     // mandar a Kommo
     let kommoOk = false, kommoError = ''
-    if (sol.lead_id && kommoListo() && consultados.length) {
+    if (!esGarante && sol.lead_id && kommoListo() && consultados.length) {
       try {
         await notaEnLead(sol.lead_id, texto)
         await actualizarLead(sol.lead_id, califica, califica ? 'Califica: ' + aprobados.map(x => x.label).join(', ') : 'No califica')
@@ -895,14 +906,14 @@ function registrarKommo(app, pool, buscarEnStock) {
       `UPDATE clientes_busqueda SET observaciones=TRIM(BOTH E'\\n' FROM COALESCE(observaciones,'') || E'\\n' || $1), updated_at=NOW() WHERE id=$2`,
       [texto, clienteId]).catch(e => console.error('[auto-calificar] nota:', e.message))
   }
-  async function calificarCliente(p) {
+  async function calificarTitular(p) {
     if (/^(no|false|0)$/i.test(String(process.env.CALIFICAR_AUTO || ''))) return { ok: false, motivo: 'apagado' }
     const dni = soloDigitos(p.dni)
     if (dni.length < 7) return { ok: false, motivo: 'sin_dni' }
     if (dni.length > 8 && dni.length !== 11) return { ok: false, motivo: 'dni_invalido' }
     // no repetir: si esta tarjeta ya tiene un pedido de calificación, no se abre otro
     if (p.clienteId) {
-      const ex = await pool.query(`SELECT id, estado FROM calificaciones_kommo WHERE cliente_id=$1 ORDER BY created_at DESC LIMIT 1`, [p.clienteId])
+      const ex = await pool.query(`SELECT id, estado FROM calificaciones_kommo WHERE cliente_id=$1 AND COALESCE(rol,'titular')='titular' ORDER BY created_at DESC LIMIT 1`, [p.clienteId])
       if (ex.rows.length) return { ok: true, ya_existia: true, solicitud_id: ex.rows[0].id }
     }
     let cuil, sexo = '', via = ''
@@ -926,6 +937,45 @@ function registrarKommo(app, pool, buscarEnStock) {
       (sexo && via.includes('nombre') ? ' ⚠️ Verificá el CUIL: el sexo se dedujo por el nombre.' : ''))
     console.log(`[auto-calificar] cliente ${p.clienteId || '-'} → CUIL ${cuil} (${via})`)
     return { ok: true, solicitud_id: r.solicitud && r.solicitud.id, cuil }
+  }
+  // Garante / cotitular (segundo DNI): se consulta en los mismos bancos y el resultado va a SUS casilleros en la tarjeta
+  async function calificarGarante(p) {
+    if (/^(no|false|0)$/i.test(String(process.env.CALIFICAR_AUTO || ''))) return { ok: false, motivo: 'apagado' }
+    if (!/^(si|sí|true|yes|1)$/i.test(String(p.tiene_garantes || '')) && !p.dni_garante) return { ok: false, motivo: 'sin_garante' }
+    const limpio = String(p.dni_garante || '').replace(/(\d)[.\s](?=\d{3}\b)/g, '$1')
+    const m = limpio.match(/\d{7,11}/)
+    if (!m) return { ok: false, motivo: 'sin_dni_garante' }
+    const dni = m[0]
+    if (dni.length > 8 && dni.length !== 11) return { ok: false, motivo: 'dni_garante_invalido' }
+    const nombreG = String(p.nombre_garante || '').split(/[,;]/)[0].trim()
+    let cuil, sexo = ''
+    if (dni.length === 11) cuil = dni
+    else {
+      sexo = normalizarSexo(p.sexo_garante) || inferirSexo(nombreG)
+      if (!sexo) {
+        await notaEnTarjeta(p.clienteId, `🏦 Garante (DNI ${dni}): no se calificó solo porque no se pudo saber si es hombre o mujer. Cargá su CUIL completo (11 números) en "DNI del garante".`)
+        return { ok: false, motivo: 'sin_sexo_garante' }
+      }
+      cuil = cuilDesdeDni(dni, sexo)
+    }
+    if (p.clienteId) {
+      const ex = await pool.query(`SELECT id FROM calificaciones_kommo WHERE cliente_id=$1 AND rol='garante' AND cuil=$2 LIMIT 1`, [p.clienteId, cuil])
+      if (ex.rows.length) return { ok: true, ya_existia: true, solicitud_id: ex.rows[0].id }
+    }
+    const r = await procesarPedido({
+      cuil, auto: p.modelo || '', anio: p.anio || '', nombre: nombreG ? `${nombreG} (garante de ${p.nombre || 'cliente'})` : `Garante de ${p.nombre || 'cliente'}`,
+      telefono: '', vendedor: p.vendedor || '', origen: 'ruthina-auto', sinAuto: true, sinCliente: true, rol: 'garante'
+    })
+    if (p.clienteId && r.solicitud) await pool.query(`UPDATE calificaciones_kommo SET cliente_id=$1 WHERE id=$2`, [p.clienteId, r.solicitud.id])
+    if (p.clienteId) await pool.query(`UPDATE clientes_busqueda SET gar_cuil=$1 WHERE id=$2`, [cuil, p.clienteId]).catch(() => {})
+    await notaEnTarjeta(p.clienteId, `🏦 Garante: calificación automática pedida — CUIL ${formatearCuil(cuil)}${sexo ? ' (' + (sexo === 'F' ? 'mujer' : 'hombre') + ')' : ''}. El resultado queda en la fila "Garante".`)
+    console.log(`[auto-calificar] cliente ${p.clienteId || '-'} garante → CUIL ${cuil}`)
+    return { ok: true, solicitud_id: r.solicitud && r.solicitud.id, cuil }
+  }
+  async function calificarCliente(p) {
+    const titular = await calificarTitular(p).catch(e => { console.error('[auto-calificar] titular:', e.message); return { ok: false, motivo: 'error' } })
+    const garante = await calificarGarante(p).catch(e => { console.error('[auto-calificar] garante:', e.message); return { ok: false, motivo: 'error' } })
+    return Object.assign({}, titular, { garante })
   }
   registrarKommo.calificarCliente = calificarCliente
 
