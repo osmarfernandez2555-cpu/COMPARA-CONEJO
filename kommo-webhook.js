@@ -669,7 +669,7 @@ function registrarKommo(app, pool, buscarEnStock) {
 
   // ── Cerrar un pedido con el resultado de los bancos (manual o automático) ──
   // entrada: { bancor:{estado:'aprobado'|'rechazado'|'no_consultado', monto:'8000000'}, nacion:{...}, galicia:{...}, decreditos:{...} }
-  async function resolverPedido(sol, entrada, obs, quien, automatico) {
+  async function resolverPedido(sol, entrada, obs, quien, automatico, forzar) {
     const resultados = {}
     BANCOS.forEach(bk => {
       const v = entrada[bk.key] || {}
@@ -677,7 +677,7 @@ function registrarKommo(app, pool, buscarEnStock) {
       resultados[bk.key] = { estado, monto: estado === 'aprobado' ? soloDigitos(v.monto) : '' }
     })
     const consultados = BANCOS.filter(bk => resultados[bk.key].estado !== 'no_consultado')
-    if (!consultados.length) { const e = new Error('Marcá el resultado de al menos un banco'); e.status = 400; throw e }
+    if (!consultados.length && !forzar) { const e = new Error('Marcá el resultado de al menos un banco'); e.status = 400; throw e }
     const aprobados = BANCOS.filter(bk => resultados[bk.key].estado === 'aprobado')
     const califica = aprobados.length > 0
     const resultado = califica ? 'califica' : 'no_califica'
@@ -686,10 +686,10 @@ function registrarKommo(app, pool, buscarEnStock) {
       const r = resultados[bk.key]
       if (r.estado === 'aprobado') return `✅ ${bk.label}: APROBADO${r.monto ? ' hasta $ ' + Number(r.monto).toLocaleString('es-AR') : ''}`
       if (r.estado === 'rechazado') return `❌ ${bk.label}: rechazado`
-      return `➖ ${bk.label}: no consultado`
+      return `➖ ${bk.label}: ${forzar ? 'sin respuesta' : 'no consultado'}`
     })
     const texto = `🏦 Calificación bancaria — CUIL ${formatearCuil(sol.cuil)}\n` +
-      (califica ? `RESULTADO: CALIFICA (${aprobados.map(x => x.label).join(', ')})` : 'RESULTADO: NO CALIFICA en los bancos consultados') +
+      (califica ? `RESULTADO: CALIFICA (${aprobados.map(x => x.label).join(', ')})` : !consultados.length ? 'RESULTADO: SIN RESPUESTA — ningún banco alcanzó a contestar en el tiempo límite' : 'RESULTADO: NO CALIFICA en los bancos consultados') +
       `\n${lineas.join('\n')}` + (obs ? `\n📝 ${obs}` : '') +
       (automatico ? '\n🤖 Consultado automáticamente por Ruthina' : (quien ? `\n👤 Consultó: ${quien}` : ''))
 
@@ -703,8 +703,9 @@ function registrarKommo(app, pool, buscarEnStock) {
       })
       params.push(aprobados.map(x => x.label).join(', ')); sets.push(`bancos=$${params.length}`)
       if (califica) { params.push('sirve'); sets.push(`calificacion=$${params.length}`) }
+      else if (automatico && consultados.length) { params.push('no_sirve'); sets.push(`calificacion=$${params.length}`) }
       const nota = `[Bancos ${new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}] ` +
-        (califica ? 'Califica: ' + aprobados.map(x => x.label).join(', ') : 'No califica en: ' + consultados.map(x => x.label).join(', ')) + (obs ? ' — ' + obs : '')
+        (califica ? 'Califica: ' + aprobados.map(x => x.label).join(', ') : !consultados.length ? 'Sin respuesta de los bancos en el tiempo límite' : 'No califica en: ' + consultados.map(x => x.label).join(', ')) + (obs ? ' — ' + obs : '')
       params.push(nota); sets.push(`observaciones=TRIM(BOTH E'\\n' FROM COALESCE(observaciones,'') || E'\\n' || $${params.length})`)
       params.push(sol.cliente_id)
       await pool.query(`UPDATE clientes_busqueda SET ${sets.join(',')}, updated_at=NOW() WHERE id=$${params.length}`, params)
@@ -713,7 +714,7 @@ function registrarKommo(app, pool, buscarEnStock) {
 
     // mandar a Kommo
     let kommoOk = false, kommoError = ''
-    if (sol.lead_id && kommoListo()) {
+    if (sol.lead_id && kommoListo() && consultados.length) {
       try {
         await notaEnLead(sol.lead_id, texto)
         await actualizarLead(sol.lead_id, califica, califica ? 'Califica: ' + aprobados.map(x => x.label).join(', ') : 'No califica')
@@ -749,6 +750,8 @@ function registrarKommo(app, pool, buscarEnStock) {
   // ═════════════════════════════════════════════════════════════════════════
   const auto = { corriendo: false, ultimoChequeo: null, sesiones: {}, error: '', consultandoAhora: '' }
   const MAX_INTENTOS = 2
+  // A los AUTO_LIMITE_MIN minutos de empezar, el pedido se cierra SÍ o SÍ con lo que haya (aprobó 1, varios, o ninguno)
+  const AUTO_LIMITE_MIN = Math.max(0.1, Number(process.env.AUTO_LIMITE_MIN || 5))
 
   function bancoListo(id, s) {
     if (!s) return false
@@ -775,10 +778,10 @@ function registrarKommo(app, pool, buscarEnStock) {
     }).filter(Boolean).join(' · ')
   }
 
-  async function consultarBancoAuto(sol, id) {
+  async function consultarBancoAuto(sol, id, maxMs) {
     try {
       const r = await bancosApi('/api/consultar', {
-        method: 'POST', timeout: 6 * 60 * 1000,
+        method: 'POST', timeout: Math.max(15000, Math.min(6 * 60 * 1000, maxMs || 6 * 60 * 1000)),
         body: { banco: id, cuit: sol.cuil, vendedor: 'Kommo (automático)' }
       })
       if (r.ok && r.data && r.data.estado) {
@@ -810,6 +813,8 @@ function registrarKommo(app, pool, buscarEnStock) {
         `SELECT * FROM calificaciones_kommo WHERE estado IN ('pendiente','en_proceso') AND LENGTH(cuil)=11 ORDER BY created_at ASC LIMIT 10`)
       for (const sol of pedidos.rows) {
         const ar = sol.auto_resultados || {}
+        if (!ar._inicio) ar._inicio = Date.now()          // arranca el reloj de los 5 minutos la primera vez que Ruthina toma el pedido
+        const restanteMs = () => AUTO_LIMITE_MIN * 60000 - (Date.now() - ar._inicio)
         const faltan = BANCOS.map(b => b.key).filter(k => {
           const r = ar[k]
           const pendiente = !r || (r.estado === 'ERROR' && (r.intentos || 0) < MAX_INTENTOS)
@@ -823,7 +828,7 @@ function registrarKommo(app, pool, buscarEnStock) {
           auto.consultandoAhora = `${formatearCuil(sol.cuil)} en ${faltan.join(', ')}`
           await guardarAuto(sol.id, ar, 'Consultando automáticamente: ' + faltan.map(k => BANCOS.find(b => b.key === k).label).join(', ') + '…')
           console.log(`[auto-bancos] pedido ${sol.id} · CUIL ${sol.cuil} → ${faltan.join(', ')}`)
-          const res = await Promise.all(faltan.map(k => consultarBancoAuto(sol, k)))
+          const res = await Promise.all(faltan.map(k => consultarBancoAuto(sol, k, restanteMs())))
           faltan.forEach((k, i) => {
             const nuevo = res[i]
             if (nuevo.estado === 'ERROR') nuevo.intentos = ((ar[k] && ar[k].intentos) || 0) + 1
@@ -840,7 +845,8 @@ function registrarKommo(app, pool, buscarEnStock) {
         const cuentan = BANCOS.filter(b => bancoCuenta(b.key, auto.sesiones[b.key]))
         const todosRechazan = cuentan.length > 0 && cuentan.every(b => ar[b.key] && ar[b.key].estado === 'DENEGADO')
 
-        if (aprobado || todosRechazan) {
+        const vencido = restanteMs() <= 0
+        if (aprobado || todosRechazan || vencido) {
           const entrada = {}
           BANCOS.forEach(b => {
             const r = ar[b.key]
@@ -849,9 +855,12 @@ function registrarKommo(app, pool, buscarEnStock) {
           const notas = BANCOS.filter(b => ar[b.key] && (ar[b.key].estado === 'REVISAR' || ar[b.key].estado === 'PREAPROBADO'))
             .map(b => `${b.label}: ${ar[b.key].estado === 'PREAPROBADO' ? 'pre-aprobado' : 'revisar'}${ar[b.key].resumen ? ' (' + String(ar[b.key].resumen).slice(0, 120) + ')' : ''}`)
           const cliente = (BANCOS.map(b => ar[b.key] && ar[b.key].cliente).find(Boolean)) || ''
-          const obs = [cliente ? 'Titular: ' + cliente : '', ...notas].filter(Boolean).join(' · ')
+          const sinResp = BANCOS.filter(b => !ar[b.key] || (ar[b.key].estado === 'ERROR') || estadoForm(ar[b.key].estado) === 'no_consultado' && !['REVISAR'].includes(ar[b.key].estado))
+            .map(b => b.label + (!bancoListo(b.key, auto.sesiones[b.key]) ? ' (sin sesión abierta)' : ''))
+          const nota5 = (!aprobado && !todosRechazan && vencido && sinResp.length) ? `Pasaron ${AUTO_LIMITE_MIN} min: sin respuesta de ${sinResp.join(', ')}` : ''
+          const obs = [cliente ? 'Titular: ' + cliente : '', ...notas, nota5].filter(Boolean).join(' · ')
           await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones))
-          const r = await resolverPedido(actual.rows[0], entrada, obs, '', true)
+          const r = await resolverPedido(actual.rows[0], entrada, obs, '', true, vencido)
           console.log(`[auto-bancos] pedido ${sol.id} cerrado: ${r.resultado}${r.kommo_enviado ? ' (enviado a Kommo)' : ' — Kommo: ' + r.kommo_error}`)
         } else {
           // queda abierto con lo que se sabe; si nadie lo está consultando, vuelve a pendiente para un vendedor
