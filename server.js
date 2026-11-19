@@ -59,6 +59,9 @@ async function initDB() {
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_nacion TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_santander TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS monto_mg TEXT DEFAULT ''`).catch(()=>{})
+  for (const col of ['monto_decreditos','gar_galicia','gar_bancor','gar_nacion','gar_santander','gar_decreditos','gar_bancos','gar_cuil']) {
+    await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`).catch(()=>{})
+  }
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS presupuesto TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS dni TEXT DEFAULT ''`).catch(()=>{})
   await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS tiene_permuta TEXT DEFAULT 'no'`).catch(()=>{})
@@ -1036,7 +1039,7 @@ app.post('/api/clientes', async (req, res) => {
        dni, tiene_permuta, auto_permuta, tiene_garantes, nombre_garante, dni_garante, String(sexo || '')]
     )
     // Calificación automática en los bancos apenas se carga la tarjeta (si trae DNI)
-    if (dni) calificarTarjeta({ clienteId: ins.rows[0].id, nombre, dni, sexo, modelo, anio, telefono })
+    if (dni || (/^(si|sí)$/i.test(String(tiene_garantes)) && dni_garante)) calificarTarjeta({ clienteId: ins.rows[0].id, nombre, dni, sexo, modelo, anio, telefono, tiene_garantes, dni_garante, nombre_garante })
     // Buscar si hay match en stock
     const stockMatch = await pool.query(
       `SELECT * FROM stock WHERE (LOWER(modelo) LIKE LOWER($1) OR LOWER(marca) LIKE LOWER($1)) ${anio ? 'AND anio=$2' : ''}`,
@@ -1049,12 +1052,12 @@ app.post('/api/clientes', async (req, res) => {
 // Calificar a mano (botón): arma el CUIL y abre el pedido en los bancos
 app.post('/api/clientes/:id/calificar', async (req, res) => {
   try {
-    const q = await pool.query('SELECT id,nombre,dni,sexo,modelo,anio,telefono,vendedor FROM clientes_busqueda WHERE id=$1', [req.params.id])
+    const q = await pool.query('SELECT id,nombre,dni,sexo,modelo,anio,telefono,vendedor,tiene_garantes,dni_garante,nombre_garante FROM clientes_busqueda WHERE id=$1', [req.params.id])
     if (!q.rows.length) return res.status(404).json({ error: 'No existe el cliente' })
     const c = q.rows[0]
     const sexo = (req.body && req.body.sexo) || c.sexo
     if (req.body && req.body.sexo) await pool.query('UPDATE clientes_busqueda SET sexo=$1 WHERE id=$2', [String(req.body.sexo), c.id])
-    const r = await kommoMod.calificarCliente({ clienteId: c.id, nombre: c.nombre, dni: c.dni, sexo, modelo: c.modelo, anio: c.anio, telefono: c.telefono, vendedor: c.vendedor })
+    const r = await kommoMod.calificarCliente({ clienteId: c.id, nombre: c.nombre, dni: c.dni, sexo, modelo: c.modelo, anio: c.anio, telefono: c.telefono, vendedor: c.vendedor, tiene_garantes: c.tiene_garantes, dni_garante: c.dni_garante, nombre_garante: c.nombre_garante })
     res.json(r)
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -1070,7 +1073,7 @@ app.delete('/api/clientes/:id', async (req, res) => {
 // ── Clientes busqueda: marcar encontrado ─────────────────────
 app.patch('/api/clientes/:id', async (req, res) => {
   try {
-    const campos = ['estado','vendedor','calificacion','observaciones','estado_lead','motivo_perdida','bancos','monto_galicia','monto_bancor','monto_nacion','monto_santander','monto_mg',
+    const campos = ['estado','vendedor','calificacion','observaciones','estado_lead','motivo_perdida','bancos','monto_galicia','monto_bancor','monto_nacion','monto_santander','monto_mg','monto_decreditos','gar_galicia','gar_bancor','gar_nacion','gar_santander','gar_decreditos',
       'nombre','telefono','dni','sexo','modelo','anio','presupuesto','tiene_permuta','auto_permuta','tiene_garantes','nombre_garante','dni_garante','notas']
     const sets = []
     const params = []
@@ -1085,9 +1088,9 @@ app.patch('/api/clientes/:id', async (req, res) => {
     params.push(req.params.id)
     const upd = await pool.query('UPDATE clientes_busqueda SET ' + sets.join(',') + ' WHERE id=$' + params.length, params)
     // si se cargó/cambió el DNI, se califica solo (si la tarjeta todavía no tiene pedido)
-    if (upd.rowCount && (req.body.dni !== undefined || req.body.sexo !== undefined)) {
-      pool.query('SELECT id,nombre,dni,sexo,modelo,anio,telefono,vendedor FROM clientes_busqueda WHERE id=$1', [req.params.id])
-        .then(q => { const c = q.rows[0]; if (c && c.dni) calificarTarjeta({ clienteId: c.id, nombre: c.nombre, dni: c.dni, sexo: c.sexo, modelo: c.modelo, anio: c.anio, telefono: c.telefono, vendedor: c.vendedor }) })
+    if (upd.rowCount && (req.body.dni !== undefined || req.body.sexo !== undefined || req.body.dni_garante !== undefined || req.body.tiene_garantes !== undefined)) {
+      pool.query('SELECT id,nombre,dni,sexo,modelo,anio,telefono,vendedor,tiene_garantes,dni_garante,nombre_garante FROM clientes_busqueda WHERE id=$1', [req.params.id])
+        .then(q => { const c = q.rows[0]; if (c && (c.dni || c.dni_garante)) calificarTarjeta({ clienteId: c.id, nombre: c.nombre, dni: c.dni, sexo: c.sexo, modelo: c.modelo, anio: c.anio, telefono: c.telefono, vendedor: c.vendedor, tiene_garantes: c.tiene_garantes, dni_garante: c.dni_garante, nombre_garante: c.nombre_garante }) })
         .catch(() => {})
     }
     res.json({ ok: true, updated: upd.rowCount })
