@@ -782,7 +782,7 @@ function registrarKommo(app, pool, buscarEnStock) {
   const auto = { corriendo: false, ultimoChequeo: null, sesiones: {}, robot: null, error: '', consultandoAhora: '' }
   const MAX_INTENTOS = 2
   // A los AUTO_LIMITE_MIN minutos de empezar, el pedido se cierra SÍ o SÍ con lo que haya (aprobó 1, varios, o ninguno)
-  const AUTO_LIMITE_MIN = Math.max(0.1, Number(process.env.AUTO_LIMITE_MIN || 5))
+  const AUTO_LIMITE_MIN = Math.max(0.1, Number(process.env.AUTO_LIMITE_MIN || 2))
   // Si el robot no devuelve un banco en este tiempo, cuenta como error (y se reintenta)
   const ROBOT_MAX_MIN = Math.max(5, Number(process.env.CONSULTA_ROBOT_MAX_MIN || 20))
 
@@ -850,6 +850,7 @@ function registrarKommo(app, pool, buscarEnStock) {
 
       const pedidos = await pool.query(
         `SELECT * FROM calificaciones_kommo WHERE estado IN ('pendiente','en_proceso') AND LENGTH(cuil)=11 ORDER BY created_at ASC LIMIT 10`)
+      auto.pendientes = pedidos.rows.length
       for (const sol of pedidos.rows) {
         const ar = sol.auto_resultados || {}
         if (!ar._inicio) ar._inicio = Date.now()          // arranca el reloj de los 5 minutos la primera vez que Ruthina toma el pedido
@@ -961,6 +962,8 @@ function registrarKommo(app, pool, buscarEnStock) {
     }
   }
   setInterval(cicloAuto, Math.max(10, Number(process.env.CONSULTA_INTERVALO_SEG || 30)) * 1000)
+  // Mientras haya pedidos abiertos se revisa cada 4 s (para levantar enseguida lo que devuelve la PC robot)
+  setInterval(() => { if (auto.pendientes > 0) cicloAuto() }, 4000)
   setTimeout(cicloAuto, 8000)
   registrarKommo.cicloAuto = cicloAuto
 
@@ -1190,7 +1193,7 @@ function registrarKommo(app, pool, buscarEnStock) {
   }
   // Pasados PARCIAL_MIN minutos sin cerrarse, el bot recibe lo que hay hasta ese momento (estado "parcial")
   // en vez de seguir viendo "pendiente" para siempre. El pedido sigue abierto para que un asesor lo termine.
-  const PARCIAL_MIN = Math.max(1, Number(process.env.CALIFICAR_PARCIAL_MIN || 3))
+  const PARCIAL_MIN = Math.max(1, Number(process.env.CALIFICAR_PARCIAL_MIN || 2))
   function respuestaCalificacion(sol, extra = {}) {
     const resuelto = sol.estado === 'resuelto'
     const descartado = sol.estado === 'descartado'
@@ -1305,6 +1308,9 @@ function registrarKommo(app, pool, buscarEnStock) {
       if (r.solicitud && r.solicitud.lead_id && kommoListo() && !r.reutilizado) {
         notaEnLead(r.solicitud.lead_id, r.texto).catch(e => console.error('[bot] nota:', e.message))
       }
+      // arrancar la consulta en los bancos ya (sin esperar la próxima vuelta)
+      auto.pendientes = Math.max(1, auto.pendientes || 0)
+      setTimeout(cicloAuto, 100)
 
       // esperar un rato por si los bancos contestan rápido
       const esperar = Math.min(Math.max(parseInt(b.esperar_segundos) || 0, 0), PARCIAL_MIN * 60)
