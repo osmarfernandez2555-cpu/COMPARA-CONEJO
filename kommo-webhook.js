@@ -882,17 +882,22 @@ function registrarKommo(app, pool, buscarEnStock) {
           try {
             const r = await robotApi('/api/robot/resultado?id=' + encodeURIComponent(rid))
             if (r.status === 404) { ks.forEach(k => { ar[k] = errorK(k, 'Consulta Créditos se reinició y perdió el pedido') }); continue }
-            if (r.ok && r.data && r.data.estado === 'listo') {
+            const listo = r.ok && r.data && r.data.estado === 'listo'
+            if (r.ok && r.data) {
+              // Cada banco apenas el robot lo termina (no hace falta esperar al más lento)
+              const hechos = []
               ks.forEach(k => {
                 const x = (r.data.resultados || []).find(z => z.banco === k)
-                if (!x) ar[k] = errorK(k, 'el robot no consultó este banco')
-                else if (x.estado === 'ERROR') ar[k] = errorK(k, x.resumen || 'error en el robot')
+                if (!x) { if (listo) ar[k] = errorK(k, 'el robot no consultó este banco'); return }
+                if (x.estado === 'ERROR') ar[k] = errorK(k, x.resumen || 'error en el robot')
                 else ar[k] = { estado: x.estado, monto: x.monto || '', cliente: x.cliente || '', resumen: x.resumen || x.nota || '', fecha: ahora(), robot: true }
+                hechos.push(k + ' ' + ar[k].estado)
               })
-              console.log(`[auto-bancos] pedido ${sol.id} · robot listo: ${ks.map(k => k + ' ' + ar[k].estado).join(', ')}`)
-            } else {
+              if (hechos.length) console.log(`[auto-bancos] pedido ${sol.id} · robot: ${hechos.join(', ')}`)
+            }
+            if (!listo) {
               // sigue en la fila del robot: si pasó demasiado tiempo, cuenta como error y se reintenta
-              ks.forEach(k => { if (Date.now() - new Date(ar[k].desde).getTime() > ROBOT_MAX_MIN * 60000) ar[k] = errorK(k, 'el robot no respondió a tiempo') })
+              ks.forEach(k => { if (ar[k].estado === 'EN_ROBOT' && Date.now() - new Date(ar[k].desde).getTime() > ROBOT_MAX_MIN * 60000) ar[k] = errorK(k, 'el robot no respondió a tiempo') })
             }
           } catch (e) { /* sin conexión: se vuelve a mirar en la próxima vuelta */ }
         }
@@ -929,6 +934,9 @@ function registrarKommo(app, pool, buscarEnStock) {
         // Mientras el robot tenga bancos en curso se espera (así el resultado llega completo), salvo que se cumpla el tiempo límite
         const robotEnCurso = BANCOS.some(b => ar[b.key] && ar[b.key].estado === 'EN_ROBOT')
         if (((aprobado || todosRechazan) && !robotEnCurso) || vencido) {
+          // Lo que siga en la fila del robot ya no hace falta: se cancela para no atrasar a los pedidos nuevos
+          const pendRobot = [...new Set(BANCOS.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT').map(k => ar[k].robotId))]
+          pendRobot.forEach(rid => robotApi('/api/robot/cancelar?id=' + encodeURIComponent(rid), { method: 'POST', body: {} }).catch(() => {}))
           const entrada = {}
           BANCOS.forEach(b => {
             const r = ar[b.key]
