@@ -358,7 +358,7 @@ function registrarKommo(app, pool, buscarEnStock) {
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT ''`).catch(() => {})
     // rol del pedido: 'titular' (el cliente) o 'garante' (cotitular / segundo DNI)
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS rol TEXT DEFAULT 'titular'`).catch(() => {})
-    for (const col of ['monto_decreditos', 'gar_galicia', 'gar_bancor', 'gar_nacion', 'gar_santander', 'gar_decreditos', 'gar_bancos', 'gar_cuil']) {
+    for (const col of ['monto_decreditos', 'gar_galicia', 'gar_bancor', 'gar_nacion', 'gar_santander', 'gar_decreditos', 'gar_bancos', 'gar_cuil', 'rechazados', 'gar_rechazados']) {
       await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`).catch(() => {})
     }
     // lo que antes se cargaba en "MG" pasa a decreditos
@@ -730,6 +730,11 @@ function registrarKommo(app, pool, buscarEnStock) {
           params.push(resultados[bk.key].monto); sets.push(`${esGarante ? 'gar_' + bk.key : bk.monto}=$${params.length}`)
         }
       })
+      // bancos que rechazaron: se marcan en rojo en la tarjeta (y se borra un monto viejo de ese banco)
+      BANCOS.forEach(bk => {
+        if (bk.monto && resultados[bk.key].estado === 'rechazado') sets.push(`${esGarante ? 'gar_' + bk.key : bk.monto}=''`)
+      })
+      params.push(BANCOS.filter(bk => resultados[bk.key].estado === 'rechazado').map(bk => bk.key).join(',')); sets.push(`${esGarante ? 'gar_rechazados' : 'rechazados'}=$${params.length}`)
       params.push(aprobados.map(x => x.label).join(', ')); sets.push(`${esGarante ? 'gar_bancos' : 'bancos'}=$${params.length}`)
       if (!esGarante) {
         if (califica) { params.push('sirve'); sets.push(`calificacion=$${params.length}`) }
