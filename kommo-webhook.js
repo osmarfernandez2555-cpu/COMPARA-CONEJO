@@ -358,6 +358,8 @@ function registrarKommo(app, pool, buscarEnStock) {
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT ''`).catch(() => {})
     // rol del pedido: 'titular' (el cliente) o 'garante' (cotitular / segundo DNI)
     await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS rol TEXT DEFAULT 'titular'`).catch(() => {})
+    // id de la consulta en otra app (Club Tutu+ → 'tutuplus:<id>')
+    await pool.query(`ALTER TABLE calificaciones_kommo ADD COLUMN IF NOT EXISTS externo_id TEXT DEFAULT ''`).catch(() => {})
     for (const col of ['monto_decreditos', 'gar_galicia', 'gar_bancor', 'gar_nacion', 'gar_santander', 'gar_decreditos', 'gar_bancos', 'gar_cuil', 'rechazados', 'gar_rechazados']) {
       await pool.query(`ALTER TABLE clientes_busqueda ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT ''`).catch(() => {})
     }
@@ -854,7 +856,7 @@ function registrarKommo(app, pool, buscarEnStock) {
       auto.error = ''
 
       const pedidos = await pool.query(
-        `SELECT * FROM calificaciones_kommo WHERE estado IN ('pendiente','en_proceso') AND LENGTH(cuil)=11 ORDER BY created_at ASC LIMIT 10`)
+        `SELECT * FROM calificaciones_kommo WHERE estado IN ('pendiente','en_proceso') AND LENGTH(cuil)=11 AND NOT (origen='tutu-plus' AND estado='en_proceso') ORDER BY created_at ASC LIMIT 10`)
       auto.pendientes = pedidos.rows.length
       for (const sol of pedidos.rows) {
         const ar = sol.auto_resultados || {}
@@ -1109,6 +1111,73 @@ function registrarKommo(app, pool, buscarEnStock) {
   })
   app.get('/api/extension/estado', async (req, res) => {
     try { res.json({ extensiones: await extensionesEstado() }) } catch (e) { res.status(500).json({ error: e.message }) }
+  })
+
+  // ═════════════════════════════════════════════════════════════════════════
+  //  CLUB TUTU+ (Tutu Express): la landing consulta sola al robot y le avisa a Ruthina para que
+  //  la consulta aparezca en "Pedidos Bancos" con su etiqueta.
+  //    POST /api/tutuplus/webhook?key=...   (key = CLUB_WEBHOOK_KEY, o KOMMO_WEBHOOK_KEY si no hay otra)
+  //    Eventos de Club Tutu+: express_nuevo · express_resultado · express_vehiculo (mystery_avisame se ignora)
+  //    En Club Tutu+ → variable LEADS_WEBHOOK = https://<ruthina>/api/tutuplus/webhook?key=<la misma clave>
+  // ═════════════════════════════════════════════════════════════════════════
+  const claveClub = () => String(process.env.CLUB_WEBHOOK_KEY || process.env.KOMMO_WEBHOOK_KEY || '').trim()
+  app.post('/api/tutuplus/webhook', express.json({ limit: '1mb' }), async (req, res) => {
+    try {
+      const k = claveClub()
+      if (!k || (req.query.key !== k && req.get('x-webhook-key') !== k)) return res.status(401).json({ ok: false, error: 'Clave incorrecta (falta ?key=...)' })
+      const b = req.body || {}
+      const evento = String(b.evento || '')
+      if (!/^express_/.test(evento)) return res.json({ ok: true, ignorado: evento })
+      const cuil = soloDigitos(b.cuit)
+      const ext = 'tutuplus:' + String(b.id || cuil)
+      const nombre = String(b.nombre || '').slice(0, 80)
+      const tel = soloDigitos(b.telefono)
+
+      let sol = (await pool.query(`SELECT * FROM calificaciones_kommo WHERE externo_id=$1 LIMIT 1`, [ext])).rows[0]
+      if (!sol) {
+        sol = (await pool.query(
+          `INSERT INTO calificaciones_kommo (cuil,cuil_valido,nombre,telefono,origen,externo_id,estado,tomado_por,observaciones)
+           VALUES ($1,$2,$3,$4,'tutu-plus',$5,'en_proceso','Tutu+ (el robot lo está evaluando)','Cliente de Tutu+ (Tutu Express)') RETURNING *`,
+          [cuil, validarCuil(cuil), nombre, tel, ext])).rows[0]
+      }
+
+      if (evento === 'express_resultado') {
+        let det = b.detalle
+        if (typeof det === 'string') { try { det = JSON.parse(det) } catch (e) { det = [] } }
+        det = Array.isArray(det) ? det : []
+        const resultados = {}
+        BANCOS.forEach(bk => {
+          const it = det.find(d => String(d.banco || '').toLowerCase() === bk.key)
+          const estado = it ? estadoForm(String(it.estado || '').toUpperCase()) : 'no_consultado'
+          resultados[bk.key] = { estado, monto: estado === 'aprobado' && it ? montoEntero(it.monto) : '' }
+        })
+        const aprobados = BANCOS.filter(bk => resultados[bk.key].estado === 'aprobado')
+        const res_ = String(b.resultado || '')
+        if (res_ === 'revisar') {
+          // el robot no pudo decidir: queda ABIERTO para que Ruthina vuelva a consultar o lo vea un vendedor
+          await pool.query(
+            `UPDATE calificaciones_kommo SET estado='pendiente', tomado_por='', resultados=$1, resultado='', resuelto_at=NULL,
+               observaciones=$2, updated_at=NOW() WHERE id=$3`,
+            [JSON.stringify(resultados), 'Tutu+: el robot no pudo decidir (algún banco no respondió). Revisar / volver a consultar.', sol.id])
+          setTimeout(() => registrarKommo.cicloAuto && registrarKommo.cicloAuto(), 500)
+        } else {
+          const califica = aprobados.length > 0 || res_ === 'aprobado'
+          await pool.query(
+            `UPDATE calificaciones_kommo SET estado='resuelto', tomado_por='', resultados=$1, resultado=$2, resuelto_por='Tutu+ (robot)',
+               resuelto_at=NOW(), updated_at=NOW(),
+               observaciones=$3 WHERE id=$4`,
+            [JSON.stringify(resultados), califica ? 'califica' : 'no_califica',
+             califica ? 'Tutu+: califica' + (aprobados.length ? ' (' + aprobados.map(x => x.label).join(', ') + ')' : '') : 'Tutu+: ningún banco ofreció crédito', sol.id])
+        }
+      }
+
+      if (evento === 'express_vehiculo' && b.vehiculo) {
+        await pool.query(
+          `UPDATE calificaciones_kommo SET auto=$1, observaciones=TRIM(BOTH E'\\n' FROM COALESCE(observaciones,'') || E'\\n' || $2), updated_at=NOW() WHERE id=$3`,
+          [String(b.vehiculo).slice(0, 160), 'Le interesa: ' + String(b.vehiculo).slice(0, 160) + (tel ? ' — WhatsApp ' + tel : ''), sol.id])
+      }
+      res.json({ ok: true, solicitud_id: sol.id })
+    } catch (e) { console.error('[tutuplus]', e.message); res.status(500).json({ ok: false, error: e.message }) }
   })
 
   // volver a consultar automáticamente un pedido (borra lo que se sabía)
