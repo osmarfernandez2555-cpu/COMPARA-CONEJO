@@ -1159,9 +1159,13 @@ app.post('/api/buscar', async (req, res) => {
 
 
 // ── INFOAUTO ─────────────────────────────────────────────────────────────────
-const INFOAUTO_API   = 'https://api.infoauto.com.ar/cars'
-const INFOAUTO_EMAIL = process.env.INFOAUTO_EMAIL || 'ventas@tutuautomotores.com'
-const INFOAUTO_PASS  = process.env.INFOAUTO_PASS  || 'Tutunadiecomotutu'
+// Servidor nuevo de InfoAuto (Nexo): usuario y clave van en variables de Railway.
+//   INFOAUTO_EMAIL / INFOAUTO_PASS   (también se aceptan INFOAUTO_USER, INFOAUTO_USUARIO, INFOAUTO_PASSWORD, INFOAUTO_CLAVE)
+//   INFOAUTO_API                     (opcional) base de la API si cambió; por defecto la de siempre
+const INFOAUTO_API   = (process.env.INFOAUTO_API || 'https://api.infoauto.com.ar/cars').replace(/\/+$/, '')
+const INFOAUTO_EMAIL = (process.env.INFOAUTO_EMAIL || process.env.INFOAUTO_USER || process.env.INFOAUTO_USUARIO || '').trim()
+const INFOAUTO_PASS  = process.env.INFOAUTO_PASS || process.env.INFOAUTO_PASSWORD || process.env.INFOAUTO_CLAVE || ''
+if (!INFOAUTO_EMAIL || !INFOAUTO_PASS) console.warn('⚠️ InfoAuto: faltan INFOAUTO_EMAIL / INFOAUTO_PASS en las variables')
 
 let infoautoToken    = null
 let infoautoExpiry   = 0
@@ -1176,7 +1180,11 @@ async function infoautoLogin() {
       'Authorization': `Basic ${basicToken}`
     }
   })
-  if (!r.ok) throw new Error('InfoAuto login falló: ' + r.status)
+  if (!r.ok) {
+    let det = ''
+    try { det = (await r.text()).replace(/\s+/g, ' ').slice(0, 200) } catch {}
+    throw new Error('InfoAuto login falló: ' + r.status + (det ? ' — ' + det : '') + ' (API: ' + INFOAUTO_API + ', usuario: ' + (INFOAUTO_EMAIL || 'VACÍO') + ')')
+  }
   const d = await r.json()
   infoautoToken   = d.access_token
   infoautoRefresh = d.refresh_token
@@ -1222,6 +1230,16 @@ async function infoautoFetch(path) {
   }
   return r.json()
 }
+
+// Diagnóstico: abrir /api/infoauto/estado para ver si el login con las variables funciona (no muestra la clave)
+app.get('/api/infoauto/estado', async (req, res) => {
+  try {
+    infoautoToken = null; infoautoRefresh = null
+    await infoautoLogin()
+    const t = await fetch(`${INFOAUTO_API}/pub/search/?page=1&page_size=1&query_string=gol`, { headers: { 'Authorization': `Bearer ${infoautoToken}` } })
+    res.json({ ok: t.ok, login: 'ok', busqueda_status: t.status, api: INFOAUTO_API, usuario: INFOAUTO_EMAIL })
+  } catch (e) { res.status(200).json({ ok: false, error: e.message, api: INFOAUTO_API, usuario: INFOAUTO_EMAIL || null }) }
+})
 
 // Buscar autos en InfoAuto
 app.get('/api/infoauto/search', async (req, res) => {
