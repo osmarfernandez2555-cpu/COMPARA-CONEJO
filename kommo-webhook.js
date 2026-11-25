@@ -955,7 +955,9 @@ function registrarKommo(app, pool, buscarEnStock) {
           const sinResp = BANCOS.filter(b => !ar[b.key] || (ar[b.key].estado === 'ERROR') || estadoForm(ar[b.key].estado) === 'no_consultado' && !['REVISAR'].includes(ar[b.key].estado))
             .map(b => b.label + (!bancoListo(b.key, auto.sesiones[b.key]) ? ' (sin sesión abierta)' : ''))
           const nota5 = (!aprobado && !todosRechazan && vencido && sinResp.length) ? `Pasaron ${AUTO_LIMITE_MIN} min: sin respuesta de ${sinResp.join(', ')}` : ''
-          const obs = [cliente ? 'Titular: ' + cliente : '', ...notas, nota5].filter(Boolean).join(' · ')
+          const filaT = actual.rows[0]
+          const datosTutu = filaT.origen === 'tutu-plus' ? ['Tutu+ (Express)' + (filaT.telefono ? ' · WhatsApp ' + filaT.telefono : ''), filaT.auto ? 'Le interesa: ' + filaT.auto : ''].filter(Boolean).join(' · ') : ''
+          const obs = [datosTutu, cliente ? 'Titular: ' + cliente : '', ...notas, nota5].filter(Boolean).join(' · ')
           await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones))
           const r = await resolverPedido(actual.rows[0], entrada, obs, '', true, vencido)
           console.log(`[auto-bancos] pedido ${sol.id} cerrado: ${r.resultado}${r.kommo_enviado ? ' (enviado a Kommo)' : ' — Kommo: ' + r.kommo_error}`)
@@ -1153,13 +1155,29 @@ function registrarKommo(app, pool, buscarEnStock) {
         })
         const aprobados = BANCOS.filter(bk => resultados[bk.key].estado === 'aprobado')
         const res_ = String(b.resultado || '')
-        if (res_ === 'revisar') {
-          // el robot no pudo decidir: queda ABIERTO para que Ruthina vuelva a consultar o lo vea un vendedor
+        if (autoActiva()) {
+          // Tutu+ solo consulta los bancos del robot (Galicia, Santander, decreditos). Lo del robot se guarda como ya
+          // consultado y Ruthina completa Bancor y Nación por su cuenta; recién después se cierra el pedido.
+          const ar = { _inicio: Date.now() }
+          det.forEach(it => {
+            const k = String(it.banco || '').toLowerCase()
+            if (!BANCOS.some(bk => bk.key === k)) return
+            const est = String(it.estado || '').toUpperCase()
+            ar[k] = est === 'ERROR'
+              ? { estado: 'ERROR', error: String(it.resumen || 'error en el robot').slice(0, 120), intentos: 1, fecha: new Date().toISOString() }
+              : { estado: est, monto: it.monto || '', cliente: it.cliente || '', resumen: it.resumen || it.nota || '', fecha: new Date().toISOString(), robot: true }
+          })
+          await pool.query(
+            `UPDATE calificaciones_kommo SET estado='pendiente', tomado_por='', resultados='{}'::jsonb, resultado='', resuelto_at=NULL,
+               auto_resultados=$1::jsonb, auto_msg='Tutu+: el robot ya consultó; Ruthina completa Bancor y Nación…', updated_at=NOW() WHERE id=$2`,
+            [JSON.stringify(ar), sol.id])
+          setTimeout(() => registrarKommo.cicloAuto && registrarKommo.cicloAuto(), 300)
+        } else if (res_ === 'revisar') {
+          // la consulta automática está apagada: queda ABIERTO para que lo vea un vendedor
           await pool.query(
             `UPDATE calificaciones_kommo SET estado='pendiente', tomado_por='', resultados=$1, resultado='', resuelto_at=NULL,
                observaciones=$2, updated_at=NOW() WHERE id=$3`,
             [JSON.stringify(resultados), 'Tutu+: el robot no pudo decidir (algún banco no respondió). Revisar / volver a consultar.', sol.id])
-          setTimeout(() => registrarKommo.cicloAuto && registrarKommo.cicloAuto(), 500)
         } else {
           const califica = aprobados.length > 0 || res_ === 'aprobado'
           await pool.query(
