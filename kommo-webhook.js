@@ -844,6 +844,9 @@ function registrarKommo(app, pool, buscarEnStock) {
       [JSON.stringify(ar), msg, id])
   }
 
+  // Tutu+ (Express): mientras la landing espera al robot, el pedido está 'en_proceso' con tomado_por 'Tutu+ …' y Ruthina no lo toca.
+  // Cuando llega express_resultado, Ruthina lo toma (tomado_por 'Ruthina (automático)') y lo sigue hasta cerrarlo,
+  // incluso los bancos que tuvo que volver a pedirle al robot.
   async function cicloAuto() {
     if (auto.corriendo || !autoActiva()) return
     auto.corriendo = true
@@ -856,7 +859,7 @@ function registrarKommo(app, pool, buscarEnStock) {
       auto.error = ''
 
       const pedidos = await pool.query(
-        `SELECT * FROM calificaciones_kommo WHERE estado IN ('pendiente','en_proceso') AND LENGTH(cuil)=11 AND NOT (origen='tutu-plus' AND estado='en_proceso') ORDER BY created_at ASC LIMIT 10`)
+        `SELECT * FROM calificaciones_kommo WHERE estado IN ('pendiente','en_proceso') AND LENGTH(cuil)=11 AND NOT (origen='tutu-plus' AND estado='en_proceso' AND COALESCE(tomado_por,'') LIKE 'Tutu+%') ORDER BY created_at ASC LIMIT 10`)
       auto.pendientes = pedidos.rows.length
       for (const sol of pedidos.rows) {
         const ar = sol.auto_resultados || {}
