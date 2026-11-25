@@ -1371,7 +1371,8 @@ function registrarKommo(app, pool, buscarEnStock) {
 
   // POST /api/bot/calificar
   // { "cuil": "20301234563", "auto": "Etios 2018", "nombre": "Juan", "telefono": "351...", "lead_id": "123",
-  //   "esperar_segundos": 20, "callback_url": "https://..." }
+  //   "esperar_segundos": 20, "callback_url": "https://...",
+  //   "origen": "ara" (opcional: pedidos de ARA, el bot del CRM WhatsApp), "rol": "garante" (opcional: segundo DNI) }
   app.post('/api/bot/calificar', express.json(), botAuth, async (req, res) => {
     try {
       const b = req.body || {}
@@ -1405,7 +1406,10 @@ function registrarKommo(app, pool, buscarEnStock) {
         lead_id: primero(b, ['lead_id', 'leadId', 'lead']),
         vendedor: primero(b, ['vendedor', 'responsable']),
         callback_url: /^(https:\/\/|http:\/\/localhost[:\/])/i.test(String(b.callback_url || '')) ? String(b.callback_url) : '',
-        origen: 'bot',
+        // ARA (CRM WhatsApp) se identifica con origen "ara"; el resto de los bots (Kommo) quedan como "bot"
+        origen: String(b.origen || '').trim().toLowerCase() === 'ara' ? 'ara' : 'bot',
+        rol: String(b.rol || '').trim().toLowerCase() === 'garante' ? 'garante' : undefined,
+        sinCliente: String(b.rol || '').trim().toLowerCase() === 'garante',   // un garante no crea un cliente nuevo
         sinAuto: true
       })
       if (r.solicitud && r.solicitud.lead_id && kommoListo() && !r.reutilizado) {
