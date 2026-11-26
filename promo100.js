@@ -14,6 +14,7 @@
 //
 //  Variables opcionales en Railway:
 //    PROMO100_MAX_POR_IP   consultas por hora por IP (por defecto 8)
+//    PROMO100_MONTO_MIN    monto mínimo aprobado (Bancor o Nación) para entrar a la promo; por defecto 6000000
 //    PROMO100_PANEL_KEY    clave que pide la pestaña "Promos 0km" de Ruthina para ver la lista (recomendada)
 // ═══════════════════════════════════════════════════════════════════════════
 const express = require('express')
@@ -61,15 +62,24 @@ module.exports = function registrarPromo100(app, pool, kommoMod) {
   }
 
   // estado del pedido traducido para la landing (solo Bancor y Nación cuentan)
+  // Para entrar a la promo, Bancor o Nación tienen que aprobar MÁS de PROMO100_MONTO_MIN (por defecto $ 6.000.000).
+  //   aprobado: algún banco aprobó más del mínimo → "Felicitaciones"
+  //   rechazado: rechazaron, o aprobaron por menos del mínimo → "probá con otro DNI"
+  //   revision: aprobaron sin informar monto, o ningún banco contestó a tiempo → "un asesor revisa tu caso"
+  const MONTO_MIN = Math.max(0, Number(String(process.env.PROMO100_MONTO_MIN || '6000000').replace(/\D/g, '')) || 6000000)
   function estadoLanding(c) {
     if (!c) return 'revision'
     if (['pendiente', 'en_proceso'].includes(c.estado)) return 'pendiente'
     if (c.estado !== 'resuelto') return 'revision'               // descartado a mano
     const r = c.resultados || {}
-    const est = k => (r[k] && r[k].estado) || 'no_consultado'
-    if (est('bancor') === 'aprobado' || est('nacion') === 'aprobado') return 'aprobado'
-    if (est('bancor') === 'rechazado' || est('nacion') === 'rechazado') return 'rechazado'
-    return 'revision'                                             // ningún banco contestó a tiempo
+    const bancos = ['bancor', 'nacion'].map(k => r[k] || {})
+    const aprob = bancos.filter(x => x.estado === 'aprobado')
+    const monto = x => Number(soloDigitos(x.monto)) || 0
+    if (aprob.some(x => monto(x) > MONTO_MIN)) return 'aprobado'
+    if (aprob.some(x => !monto(x))) return 'revision'            // aprobó pero sin monto: que lo vea un asesor
+    if (aprob.length) return 'rechazado'                         // aprobó por menos del mínimo
+    if (bancos.some(x => x.estado === 'rechazado')) return 'rechazado'
+    return 'revision'                                            // ningún banco contestó a tiempo
   }
 
   app.post('/api/promo100/calificar', express.json({ limit: '50kb' }), limitar, async (req, res) => {
@@ -143,6 +153,7 @@ module.exports = function registrarPromo100(app, pool, kommoMod) {
         totales[k]++
         const a = x.promo_auto || x.auto || '(sin auto)'
         por_auto[a] = por_auto[a] || { total: 0, aprobados: 0 }
+        x.monto_minimo = MONTO_MIN
         por_auto[a].total++
         if (x.estado_promo === 'aprobado') por_auto[a].aprobados++
       })
