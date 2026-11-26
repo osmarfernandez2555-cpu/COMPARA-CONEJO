@@ -6,13 +6,12 @@
 //  en "Pedidos Bancos" y lo resuelve la consulta automática de kommo-webhook.js usando SOLO
 //  Bancor y Nación (ver bancosDe()). Al cliente nunca le llega el banco ni el monto.
 //
-//    POST /api/promo100/calificar   {cuit, auto, telefono, dni?, genero?}
-//         -> {estado: 'pendiente', id} | {estado: 'agotado'}
+//    POST /api/promo100/calificar   {cuit, auto, telefono, dni?, genero?}  -> {estado: 'pendiente', id}
 //    GET  /api/promo100/estado/:id  -> {estado: 'pendiente'|'aprobado'|'rechazado'|'revision'}
-//    GET  /api/promo100/cupos       -> {total, restantes}
 //
-//  Variables opcionales en Railway:
-//    PROMO100_CUPOS        (por defecto 50)
+//  Los "50 cupos" de la landing son fijos (estrategia comercial): acá no se cuentan ni se descuentan.
+//
+//  Variable opcional en Railway:
 //    PROMO100_MAX_POR_IP   consultas por hora por IP (por defecto 8)
 // ═══════════════════════════════════════════════════════════════════════════
 const express = require('express')
@@ -33,7 +32,6 @@ function validarCuil(c) {
 }
 
 module.exports = function registrarPromo100(app, pool, kommoMod) {
-  const TOTAL = Math.max(1, Number(process.env.PROMO100_CUPOS || 50))
   const MAX_IP = Math.max(1, Number(process.env.PROMO100_MAX_POR_IP || 8))
 
   pool.query(`CREATE TABLE IF NOT EXISTS promo100_solicitudes (
@@ -60,16 +58,6 @@ module.exports = function registrarPromo100(app, pool, kommoMod) {
     next()
   }
 
-  // aprobados en la promo = CUILs distintos con Bancor o Nación aprobado
-  const SQL_APROBADO = `(c.resultados->'bancor'->>'estado' = 'aprobado' OR c.resultados->'nacion'->>'estado' = 'aprobado')`
-  async function restantes() {
-    const r = await pool.query(
-      `SELECT COUNT(DISTINCT p.cuil)::int n FROM promo100_solicitudes p
-         JOIN calificaciones_kommo c ON c.id = p.pedido_id
-        WHERE c.estado = 'resuelto' AND ${SQL_APROBADO}`)
-    return Math.max(0, TOTAL - r.rows[0].n)
-  }
-
   // estado del pedido traducido para la landing (solo Bancor y Nación cuentan)
   function estadoLanding(c) {
     if (!c) return 'revision'
@@ -82,11 +70,6 @@ module.exports = function registrarPromo100(app, pool, kommoMod) {
     return 'revision'                                             // ningún banco contestó a tiempo
   }
 
-  app.get('/api/promo100/cupos', async (req, res) => {
-    try { res.json({ total: TOTAL, restantes: await restantes() }) }
-    catch (e) { res.status(500).json({ error: e.message }) }
-  })
-
   app.post('/api/promo100/calificar', express.json({ limit: '50kb' }), limitar, async (req, res) => {
     try {
       const b = req.body || {}
@@ -98,7 +81,6 @@ module.exports = function registrarPromo100(app, pool, kommoMod) {
       if (!validarCuil(cuil)) return res.status(400).json({ error: 'CUIT o CUIL inválido' })
       if (!AUTOS[autoKey]) return res.status(400).json({ error: 'Auto inválido' })
       if (telefono.length < 8) return res.status(400).json({ error: 'Teléfono inválido' })
-      if (await restantes() <= 0) return res.json({ estado: 'agotado' })
       const auto = AUTOS[autoKey]
 
       // mismo CUIL en las últimas 24 h por la landing: se devuelve esa consulta (no se vuelve a los bancos)
