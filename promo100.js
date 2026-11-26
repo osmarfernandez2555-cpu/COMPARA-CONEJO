@@ -8,11 +8,13 @@
 //
 //    POST /api/promo100/calificar   {cuit, auto, telefono, dni?, genero?}  -> {estado: 'pendiente', id}
 //    GET  /api/promo100/estado/:id  -> {estado: 'pendiente'|'aprobado'|'rechazado'|'revision'}
+//    GET  /api/promo100/resumen     -> totales, volumen por auto y la lista (pestaña "Promos 0km" de Pedidos Bancos)
 //
 //  Los "50 cupos" de la landing son fijos (estrategia comercial): acá no se cuentan ni se descuentan.
 //
-//  Variable opcional en Railway:
+//  Variables opcionales en Railway:
 //    PROMO100_MAX_POR_IP   consultas por hora por IP (por defecto 8)
+//    PROMO100_PANEL_KEY    clave que pide la pestaña "Promos 0km" de Ruthina para ver la lista (recomendada)
 // ═══════════════════════════════════════════════════════════════════════════
 const express = require('express')
 
@@ -117,6 +119,35 @@ module.exports = function registrarPromo100(app, pool, kommoMod) {
       console.error('[promo100] calificar:', e.message)
       res.status(500).json({ error: 'No se pudo registrar la consulta' })
     }
+  })
+
+  // Panel de Ruthina (Pedidos Bancos → pestaña "Promos 0km"): todas las consultas de la landing con su resultado
+  //   GET /api/promo100/resumen   -> { totales: {total, aprobados, rechazados, pendientes, revision}, por_auto: {...}, pedidos: [...] }
+  // Lista con CUIL y teléfonos: si PROMO100_PANEL_KEY está cargada en Railway, se pide en el header x-panel-key
+  app.get('/api/promo100/resumen', async (req, res) => {
+    const clave = String(process.env.PROMO100_PANEL_KEY || '').trim()
+    if (clave && String(req.get('x-panel-key') || '').trim() !== clave) return res.status(401).json({ error: 'Clave del panel incorrecta' })
+    try {
+      const r = await pool.query(
+        `SELECT DISTINCT ON (c.id) c.*, p.id AS promo_id, p.auto AS promo_auto, p.telefono AS promo_tel, p.dni AS promo_dni,
+                p.created_at AS promo_at
+           FROM promo100_solicitudes p JOIN calificaciones_kommo c ON c.id = p.pedido_id
+          ORDER BY c.id DESC, p.id DESC
+          LIMIT 1000`)
+      const pedidos = r.rows.map(x => Object.assign(x, { estado_promo: estadoLanding(x) }))
+        .sort((a, b) => new Date(b.promo_at) - new Date(a.promo_at))
+      const totales = { total: pedidos.length, aprobados: 0, rechazados: 0, pendientes: 0, revision: 0 }
+      const por_auto = {}
+      pedidos.forEach(x => {
+        const k = { aprobado: 'aprobados', rechazado: 'rechazados', pendiente: 'pendientes', revision: 'revision' }[x.estado_promo]
+        totales[k]++
+        const a = x.promo_auto || x.auto || '(sin auto)'
+        por_auto[a] = por_auto[a] || { total: 0, aprobados: 0 }
+        por_auto[a].total++
+        if (x.estado_promo === 'aprobado') por_auto[a].aprobados++
+      })
+      res.json({ totales, por_auto, pedidos })
+    } catch (e) { res.status(500).json({ error: e.message }) }
   })
 
   app.get('/api/promo100/estado/:id', async (req, res) => {
