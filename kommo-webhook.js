@@ -47,6 +47,10 @@ const BANCOS = [
   { key: 'santander',  label: 'Santander',   monto: 'monto_santander' }
 ]
 
+// Pedidos de la landing "promo 100% financiado" (promos-0km): se califican SOLO con Bancor y Nación
+const BANCOS_PROMO100 = ['bancor', 'nacion']
+const bancosDe = sol => (sol && sol.origen === 'promo-100') ? BANCOS.filter(b => BANCOS_PROMO100.includes(b.key)) : BANCOS
+
 // ── utilidades ─────────────────────────────────────────────────────────────
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 const soloDigitos = s => String(s || '').replace(/\D/g, '')
@@ -810,8 +814,8 @@ function registrarKommo(app, pool, buscarEnStock) {
     return true
   }
 
-  function resumenAuto(ar, sesiones) {
-    return BANCOS.map(bk => {
+  function resumenAuto(ar, sesiones, lista) {
+    return (lista || BANCOS).map(bk => {
       const r = ar[bk.key]
       if (r && r.estado === 'EN_ROBOT') return `${bk.label}: en el robot${auto.robot && !auto.robot.conectado ? ' (la PC robot está apagada)' : ''}`
       if (r && r.estado && r.estado !== 'ERROR') return `${bk.label}: ${r.estado}${r.monto ? ' $' + r.monto : ''}`
@@ -863,6 +867,7 @@ function registrarKommo(app, pool, buscarEnStock) {
       auto.pendientes = pedidos.rows.length
       for (const sol of pedidos.rows) {
         const ar = sol.auto_resultados || {}
+        const bks = bancosDe(sol)                          // promo-100: solo Bancor y Nación
         if (!ar._inicio) ar._inicio = Date.now()          // arranca el reloj de los 5 minutos la primera vez que Ruthina toma el pedido
         const restanteMs = () => AUTO_LIMITE_MIN * 60000 - (Date.now() - ar._inicio)
         const ahora = () => new Date().toISOString()
@@ -870,7 +875,7 @@ function registrarKommo(app, pool, buscarEnStock) {
         const errorK = (k, error) => ({ estado: 'ERROR', error, intentos: ((ar[k] && ar[k].intentos) || 0) + 1, fecha: ahora() })
 
         // 1) Bancos de la extensión → se los pide al robot de Consulta Créditos (una sola vez por pedido)
-        const faltanRobot = BANCOS.map(b => b.key).filter(k => pendienteK(k) && porRobot(k, auto.sesiones[k]))
+        const faltanRobot = bks.map(b => b.key).filter(k => pendienteK(k) && porRobot(k, auto.sesiones[k]))
         if (faltanRobot.length) {
           try {
             const r = await robotApi('/api/robot/consultar', { method: 'POST', body: { cuit: sol.cuil, bancos: faltanRobot.join(',') } })
@@ -882,13 +887,13 @@ function registrarKommo(app, pool, buscarEnStock) {
           if (sol.estado === 'pendiente') {
             await pool.query(`UPDATE calificaciones_kommo SET estado='en_proceso', tomado_por='Ruthina (automático)' WHERE id=$1 AND estado='pendiente'`, [sol.id])
           }
-          await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones))
+          await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones, bks))
         }
 
         // 2) Lo que ya terminó el robot
-        const idsRobot = [...new Set(BANCOS.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT').map(k => ar[k].robotId))]
+        const idsRobot = [...new Set(bks.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT').map(k => ar[k].robotId))]
         for (const rid of idsRobot) {
-          const ks = BANCOS.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT' && ar[k].robotId === rid)
+          const ks = bks.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT' && ar[k].robotId === rid)
           try {
             const r = await robotApi('/api/robot/resultado?id=' + encodeURIComponent(rid))
             if (r.status === 404) { ks.forEach(k => { ar[k] = errorK(k, 'Consulta Créditos se reinició y perdió el pedido') }); continue }
@@ -911,10 +916,10 @@ function registrarKommo(app, pool, buscarEnStock) {
             }
           } catch (e) { /* sin conexión: se vuelve a mirar en la próxima vuelta */ }
         }
-        if (idsRobot.length) await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones))
+        if (idsRobot.length) await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones, bks))
 
         // 3) Bancos con sesión en el servidor (Bancor, Nación): se consultan directo, como siempre
-        const faltan = BANCOS.map(b => b.key).filter(k => pendienteK(k) && bancoListo(k, auto.sesiones[k]) && !porRobot(k, auto.sesiones[k]))
+        const faltan = bks.map(b => b.key).filter(k => pendienteK(k) && bancoListo(k, auto.sesiones[k]) && !porRobot(k, auto.sesiones[k]))
 
         if (faltan.length) {
           if (sol.estado === 'pendiente') {
@@ -936,37 +941,38 @@ function registrarKommo(app, pool, buscarEnStock) {
         const actual = await pool.query(`SELECT * FROM calificaciones_kommo WHERE id=$1`, [sol.id])
         if (!actual.rows.length || !['pendiente', 'en_proceso'].includes(actual.rows[0].estado)) continue   // lo cerró un vendedor mientras tanto
 
-        const aprobado = BANCOS.some(b => ar[b.key] && estadoForm(ar[b.key].estado) === 'aprobado')
-        const cuentan = BANCOS.filter(b => bancoCuenta(b.key, auto.sesiones[b.key]))
+        const aprobado = bks.some(b => ar[b.key] && estadoForm(ar[b.key].estado) === 'aprobado')
+        const cuentan = bks.filter(b => bancoCuenta(b.key, auto.sesiones[b.key]))
         const todosRechazan = cuentan.length > 0 && cuentan.every(b => ar[b.key] && ['DENEGADO', 'REVISAR'].includes(ar[b.key].estado))
 
         const vencido = restanteMs() <= 0
         // Mientras el robot tenga bancos en curso se espera (así el resultado llega completo), salvo que se cumpla el tiempo límite
-        const robotEnCurso = BANCOS.some(b => ar[b.key] && ar[b.key].estado === 'EN_ROBOT')
+        const robotEnCurso = bks.some(b => ar[b.key] && ar[b.key].estado === 'EN_ROBOT')
         if (((aprobado || todosRechazan) && !robotEnCurso) || vencido) {
           // Lo que siga en la fila del robot ya no hace falta: se cancela para no atrasar a los pedidos nuevos
-          const pendRobot = [...new Set(BANCOS.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT').map(k => ar[k].robotId))]
+          const pendRobot = [...new Set(bks.map(b => b.key).filter(k => ar[k] && ar[k].estado === 'EN_ROBOT').map(k => ar[k].robotId))]
           pendRobot.forEach(rid => robotApi('/api/robot/cancelar?id=' + encodeURIComponent(rid), { method: 'POST', body: {} }).catch(() => {}))
           const entrada = {}
-          BANCOS.forEach(b => {
+          bks.forEach(b => {
             const r = ar[b.key]
             entrada[b.key] = r ? { estado: estadoForm(r.estado), monto: montoEntero(r.monto) } : { estado: 'no_consultado' }
           })
-          const notas = BANCOS.filter(b => ar[b.key] && (ar[b.key].estado === 'REVISAR' || ar[b.key].estado === 'PREAPROBADO'))
+          const notas = bks.filter(b => ar[b.key] && (ar[b.key].estado === 'REVISAR' || ar[b.key].estado === 'PREAPROBADO'))
             .map(b => `${b.label}: ${ar[b.key].estado === 'PREAPROBADO' ? 'pre-aprobado' : 'revisar'}${ar[b.key].resumen ? ' (' + String(ar[b.key].resumen).slice(0, 120) + ')' : ''}`)
-          const cliente = (BANCOS.map(b => ar[b.key] && ar[b.key].cliente).find(Boolean)) || ''
-          const sinResp = BANCOS.filter(b => !ar[b.key] || (ar[b.key].estado === 'ERROR') || estadoForm(ar[b.key].estado) === 'no_consultado' && !['REVISAR'].includes(ar[b.key].estado))
+          const cliente = (bks.map(b => ar[b.key] && ar[b.key].cliente).find(Boolean)) || ''
+          const sinResp = bks.filter(b => !ar[b.key] || (ar[b.key].estado === 'ERROR') || estadoForm(ar[b.key].estado) === 'no_consultado' && !['REVISAR'].includes(ar[b.key].estado))
             .map(b => b.label + (!bancoListo(b.key, auto.sesiones[b.key]) ? ' (sin sesión abierta)' : ''))
           const nota5 = (!aprobado && !todosRechazan && vencido && sinResp.length) ? `Pasaron ${AUTO_LIMITE_MIN} min: sin respuesta de ${sinResp.join(', ')}` : ''
           const filaT = actual.rows[0]
-          const datosTutu = filaT.origen === 'tutu-plus' ? ['Tutu+ (Express)' + (filaT.telefono ? ' · WhatsApp ' + filaT.telefono : ''), filaT.auto ? 'Le interesa: ' + filaT.auto : ''].filter(Boolean).join(' · ') : ''
+          const datosTutu = filaT.origen === 'tutu-plus' ? ['Tutu+ (Express)' + (filaT.telefono ? ' · WhatsApp ' + filaT.telefono : ''), filaT.auto ? 'Le interesa: ' + filaT.auto : ''].filter(Boolean).join(' · ')
+            : filaT.origen === 'promo-100' ? ['Promo 100% financiado (landing)' + (filaT.telefono ? ' · Tel ' + filaT.telefono : ''), filaT.auto ? 'Le interesa: ' + filaT.auto : ''].filter(Boolean).join(' · ') : ''
           const obs = [datosTutu, cliente ? 'Titular: ' + cliente : '', ...notas, nota5].filter(Boolean).join(' · ')
-          await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones))
+          await guardarAuto(sol.id, ar, resumenAuto(ar, auto.sesiones, bks))
           const r = await resolverPedido(actual.rows[0], entrada, obs, '', true, vencido)
           console.log(`[auto-bancos] pedido ${sol.id} cerrado: ${r.resultado}${r.kommo_enviado ? ' (enviado a Kommo)' : ' — Kommo: ' + r.kommo_error}`)
         } else {
           // queda abierto con lo que se sabe; si nadie lo está consultando, vuelve a pendiente para un vendedor
-          const msg = resumenAuto(ar, auto.sesiones)
+          const msg = resumenAuto(ar, auto.sesiones, bks)
           await guardarAuto(sol.id, ar, msg)
           if (actual.rows[0].tomado_por === 'Ruthina (automático)' && !robotEnCurso) {
             await pool.query(`UPDATE calificaciones_kommo SET estado='pendiente', tomado_por='' WHERE id=$1 AND tomado_por='Ruthina (automático)'`, [sol.id])

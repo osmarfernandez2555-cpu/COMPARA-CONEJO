@@ -1334,6 +1334,9 @@ app.delete('/api/vendedores/:nombre', async (req, res) => {
 const kommoMod = require('./kommo-webhook')
 kommoMod(app, pool, buscarEnStock)
 
+// ── PROMO 100% FINANCIADO (landing promos-0km): califica solo con Bancor y Nación ──
+require('./promo100')(app, pool, kommoMod)
+
 // ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
 // Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
 // Variables de entorno en Railway: KOMMO_LECTURA_TOKEN (obligatoria, token de larga duración; es distinta de KOMMO_TOKEN, que usa el webhook para ESCRIBIR en Kommo),
