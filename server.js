@@ -1337,6 +1337,9 @@ kommoMod(app, pool, buscarEnStock)
 // ── PROMO 100% FINANCIADO (landing promos-0km): califica solo con Bancor y Nación ──
 require('./promo100')(app, pool, kommoMod)
 
+// ── TUTU MARKET: web pública con el stock (sin precios) ── ver market.js
+require('./market')(app, pool)
+
 // ── KOMMO (SOLO LECTURA) ─────────────────────────────────────────────
 // Panel "Kommo" de Ruthina: chat con Claude que consulta Kommo. Nunca escribe en Kommo.
 // Variables de entorno en Railway: KOMMO_LECTURA_TOKEN (obligatoria, token de larga duración; es distinta de KOMMO_TOKEN, que usa el webhook para ESCRIBIR en Kommo),
