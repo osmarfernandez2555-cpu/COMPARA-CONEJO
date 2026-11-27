@@ -40,6 +40,7 @@ const CAMPOS_PUBLICOS = 'id, marca, modelo, version, anio, km, color, estado, fo
 // Mismo número escrito de distintas formas (+54 9 351..., 0351..., 351...) -> últimos 10 dígitos
 const telNorm = t => String(t || '').replace(/\D/g, '').slice(-10)
 const UA = 'TutuMarket/1.0 (+https://tutuautomotores.com)'
+const REF_DESDE = new Date('2026-11-27T16:30:00Z') // cambiar cuando se mejore la búsqueda, para reintentar los modelos que quedaron sin foto
 
 function driveDirecto(url) {
   const m = String(url).match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{20,})/)
@@ -67,6 +68,19 @@ const claveRef = (marca, modelo) => norm(marca) + '|' + modeloBase(modelo)
 const MALAS = /\b(interior|interieur|innenraum|cockpit|dashboard|tablero|engine|motor|moteur|trunk|baul|boot|kofferraum|door|puerta|seat|asiento|wheel|rueda|llanta|rim|logo|badge|emblem|emblema|insignia|steering|volante|detail|detalle|headlight|faro|taillight|grille|parrilla|tc2000|tc 2000|turismo carretera|rally|rallye|race|racing|carrera|competicion|stock car|wrc|dakar|crash|accidente|choque|wreck|police|policia|patrullero|taxi|remis|ambulance|ambulancia|bomberos|model|maqueta|toy|juguete|matchbox|hot wheels|lego|brochure|folleto|advert|publicidad|poster|drawing|sketch|render|patent|concept|prototype|prototipo|mule|camouflage|camuflado)\b/
 const BUENAS = /\b(front|frontal|frente|three quarter|3 4|vista|side|lateral|left|right|izquierda|derecha)\b/
 
+function puntajeTipo(titulo, w, h, tipo) {
+  const t = norm(titulo.replace(/^File:/, '').replace(/\.[a-z]+$/i, ''))
+  if (!tipo.palabras.test(t) || MALAS_TIPO.test(t)) return -1
+  if (!w || !h || w < 800 || w / h < 1.2) return -1
+  let p = 10
+  if (BUENAS.test(t)) p += 3
+  if (/\b(race|racing|championship|campeonato|grand national|trophy|rider|pilote|piloto|track|pista)\b/.test(t)) p -= 4 // mejor la moto sola que una carrera
+  const y = (t.match(/\b(20[0-4]\d)\b/) || [])[1]
+  if (y) p += 1 // fotos actuales antes que viejas
+  if (/\b(motorcycle|motorbike|bike|moto)\b/.test(t)) p += 2 // que el título hable de la moto, no de una persona
+  return p
+}
+
 function puntaje(titulo, w, h, marca, modelo, anio) {
   const t = norm(titulo.replace(/^File:/, '').replace(/\.[a-z]+$/i, ''))
   const [m1, m2] = modeloBase(modelo).split(' ')
@@ -85,10 +99,25 @@ function puntaje(titulo, w, h, marca, modelo, anio) {
   return p
 }
 
+// ── Motos ───────────────────────────────────────────────────────────────────
+// Marcas que en Argentina son (casi) solo motos. Honda, Suzuki y Shineray hacen autos también: esos se detectan por el modelo.
+const MARCAS_MOTO = /^(zanella|motomel|gilera|corven|keller|mondial|guerrero|bajaj|ktm|benelli|royal enfield|beta|jawa|hero|tvs|siambretta|vespa|ducati|harley|harley davidson|triumph|husqvarna|kymco|sym|cfmoto|cf moto|voge|brava|okinoi|appia|yamaha|kawasaki|rouser|dayun|motomel skua|leonardo|sanyang|aprilia|mv agusta|piaggio|zontes|haojue|loncin|lifan)\b/
+const PALABRAS_MOTO = /\b(moto|motocicleta|enduro|cross|motocross|trail|motard|scooter|cuatri\w*|quad|atv|naked|\d{2,4} ?cc|wave|biz|tornado|twister|xr ?\d+|crf ?\d*|cg ?\d+|ybr|xtz|ttr|fz ?\d*|dominar|rouser|duke|ninja|cb ?\d+|skua|blitz|zb ?\d+|zr ?\d+|smash|patagonian)\b/
+const esMoto = (marca, modelo, version) => MARCAS_MOTO.test(norm(marca)) || PALABRAS_MOTO.test(norm(`${modelo} ${version}`))
+// Tipo de moto para buscar una foto ilustrativa cuando no hay del modelo exacto
+function tipoMoto(modelo, version) {
+  const t = norm(`${modelo} ${version}`)
+  if (/\b(enduro|cross|motocross|trail|motard|xr ?\d+|crf|xtz|ttr|tornado|skua)\b/.test(t)) return { clave: 'enduro', q: 'enduro motorcycle', palabras: /\b(enduro|dirt bike|motocross|trail|dual sport|crf|xr|ktm exc|wr)\b/ }
+  if (/\b(scooter|vespa|biz|cub|wave)\b/.test(t)) return { clave: 'scooter', q: 'scooter motorcycle', palabras: /\b(scooter|vespa|motor scooter|underbone|cub)\b/ }
+  if (/\b(cuatri\w*|quad|atv)\b/.test(t)) return { clave: 'cuatri', q: 'quad ATV', palabras: /\b(atv|quad|quad bike|all terrain vehicle)\b/ }
+  return { clave: 'calle', q: 'motorcycle parked', palabras: /\b(motorcycle|motorbike|moto)\b/ }
+}
+const MALAS_TIPO = /\b(crash|accidente|choque|wreck|logo|badge|emblem|toy|juguete|lego|drawing|sketch|poster|brochure|police|policia|engine|motor|dashboard|cockpit|wheel|rueda|seat|asiento|helmet|casco|museum|museo|vintage|antique|classic|clasica|sign|license|exhaust|escape|cockpit|tablero|1[89]\d\ds?)\b/
+
 const sinHtml = s => String(s || '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
 
-async function buscarCommons(marca, modelo, anio, descartadas) {
-  const q = `${marca} ${modeloBase(modelo).split(' ')[0]} filetype:bitmap`
+async function buscarCommons(marca, modelo, anio, descartadas, tipo) {
+  const q = tipo ? `${tipo.q} filetype:bitmap` : `${marca} ${modeloBase(modelo).split(' ')[0]} filetype:bitmap`
   const url = 'https://commons.wikimedia.org/w/api.php?' + new URLSearchParams({
     action: 'query', format: 'json', generator: 'search', gsrnamespace: '6', gsrsearch: q, gsrlimit: '40',
     prop: 'imageinfo', iiprop: 'url|size|extmetadata', iiextmetadatafilter: 'LicenseShortName|Artist|UsageTerms', iiurlwidth: '1200'
@@ -104,9 +133,9 @@ async function buscarCommons(marca, modelo, anio, descartadas) {
     if (!/^(cc0|public domain|dominio publico|pd|cc[ -]by)/i.test(lic)) continue // solo licencias libres conocidas
     const src = (ii.thumburl || ii.url || '').replace(/[?&]utm_[^&]*/g, '').replace(/\?$/, '')
     if (!src || (descartadas || []).includes(src)) continue
-    const s = puntaje(p.title, ii.width, ii.height, marca, modelo, anio)
+    const s = tipo ? puntajeTipo(p.title, ii.width, ii.height, tipo) : puntaje(p.title, ii.width, ii.height, marca, modelo, anio)
     if (s < 0) continue
-    cand.push({ s, idx: p.index || 99, url: src, autor: sinHtml(ii.extmetadata.Artist && ii.extmetadata.Artist.value) || 'Autor en Wikimedia Commons', licencia: lic, pagina: ii.descriptionurl })
+    cand.push({ s, idx: p.index || 99, nivel: tipo ? 'tipo' : 'modelo', url: src, autor: sinHtml(ii.extmetadata.Artist && ii.extmetadata.Artist.value) || 'Autor en Wikimedia Commons', licencia: lic, pagina: ii.descriptionurl })
   }
   cand.sort((a, b) => b.s - a.s || a.idx - b.idx)
   return cand.slice(0, 3).map(({ s, idx, ...c }) => c)
@@ -138,6 +167,7 @@ module.exports = function (app, pool) {
         const f = JSON.parse(row.fotos || '[]')
         // Las búsquedas que no encontraron nada se reintentan a los 15 días
         if (!f.length && Date.now() - new Date(row.buscado_en).getTime() > 15 * 864e5) continue
+        if (!f.length && new Date(row.buscado_en) < REF_DESDE) continue // búsquedas vacías de versiones anteriores (antes no se buscaban motos por tipo)
         cache.set(row.clave, f)
       }
     } catch (e) { console.error('Market ref cache:', e.message) }
@@ -148,7 +178,7 @@ module.exports = function (app, pool) {
     if (!refActivo()) return
     const k = claveRef(row.marca, row.modelo)
     if (!modeloBase(row.modelo) || cache.has(k) || cola.has(k)) return
-    cola.set(k, { marca: row.marca, modelo: row.modelo, anio: row.anio })
+    cola.set(k, { marca: row.marca, modelo: row.modelo, anio: row.anio, version: row.version || '' })
     if (!trabajando) procesar()
   }
   async function procesar() {
@@ -159,7 +189,12 @@ module.exports = function (app, pool) {
       try {
         const d = await pool.query(`SELECT descartadas FROM market_ref WHERE clave=$1`, [k])
         const desc = d.rows.length ? JSON.parse(d.rows[0].descartadas || '[]') : []
-        const fotos = await buscarCommons(a.marca, a.modelo, a.anio, desc)
+        let fotos = await buscarCommons(a.marca, a.modelo, a.anio, desc)
+        if (!fotos.length && esMoto(a.marca, a.modelo, a.version)) {
+          // No hay fotos de este modelo de moto: foto real de una moto del mismo tipo, marcada como ilustrativa
+          await new Promise(r => setTimeout(r, 1200))
+          fotos = await buscarCommons(a.marca, a.modelo, a.anio, desc, tipoMoto(a.modelo, a.version))
+        }
         cache.set(k, fotos)
         await pool.query(`INSERT INTO market_ref (clave, fotos, buscado_en) VALUES ($1,$2,NOW())
           ON CONFLICT (clave) DO UPDATE SET fotos=EXCLUDED.fotos, buscado_en=NOW()`, [k, JSON.stringify(fotos)])
@@ -198,7 +233,8 @@ module.exports = function (app, pool) {
       reservado: /reserv/i.test(row.estado || ''),
       fotos,
       fotos_reales: fotos.length > 0,
-      ref,                      // fotos del modelo (no de la unidad), con autor y licencia
+      ref,                      // fotos del modelo (nivel 'modelo') o del tipo de vehículo (nivel 'tipo'), con autor y licencia
+      tipo: esMoto(row.marca, row.modelo, row.version) ? 'moto' : 'auto',
       nuevo: row.created_at ? (Date.now() - new Date(row.created_at).getTime()) < 7 * 864e5 : false
     }
   }
