@@ -18,6 +18,10 @@
 //    GET  /api/market/autos           -> lista pública (sin precio)
 //    GET  /api/market/autos/:id       -> un auto (sin precio)
 //    POST /api/market/fotos/:id       -> cargar fotos reales {fotos:[url,...]}       (header x-market-key)
+//    POST /api/market/fotos-wa        -> foto que mandó un cliente por WhatsApp {telefono, mime, base64} (header x-market-key)
+//                                        La manda el bot de venta/consignación (tutu-ventas). Se guarda en market_fotos
+//                                        y se muestra en el auto del stock que tenga ese mismo teléfono.
+//    GET  /api/market/foto/:id        -> sirve una foto guardada
 //    POST /api/market/ref/descartar   -> "esta foto no corresponde" {marca, modelo, url} (header x-market-key)
 //    POST /api/market/ref/rebuscar    -> volver a buscar {marca, modelo} o todo {}     (header x-market-key)
 //    GET  /api/market/ref/estado      -> cuántos modelos tienen foto de referencia
@@ -31,7 +35,10 @@
 const path = require('path')
 const fetch = require('node-fetch')
 
-const CAMPOS_PUBLICOS = 'id, marca, modelo, version, anio, km, color, estado, fotos, notas, origen, created_at'
+// telefono se lee solo para unir las fotos de WhatsApp: NUNCA sale en la respuesta pública (ver publico())
+const CAMPOS_PUBLICOS = 'id, marca, modelo, version, anio, km, color, estado, fotos, notas, origen, telefono, created_at'
+// Mismo número escrito de distintas formas (+54 9 351..., 0351..., 351...) -> últimos 10 dígitos
+const telNorm = t => String(t || '').replace(/\D/g, '').slice(-10)
 const UA = 'TutuMarket/1.0 (+https://tutuautomotores.com)'
 
 function driveDirecto(url) {
@@ -109,6 +116,12 @@ module.exports = function (app, pool) {
   pool.query(`ALTER TABLE stock ADD COLUMN IF NOT EXISTS fotos TEXT DEFAULT ''`)
     .then(() => console.log('✅ Market: columna fotos lista'))
     .catch(e => console.error('Market fotos:', e.message))
+  pool.query(`CREATE TABLE IF NOT EXISTS market_fotos (
+      id SERIAL PRIMARY KEY, telefono TEXT NOT NULL, mime TEXT DEFAULT 'image/jpeg', data BYTEA NOT NULL,
+      hash TEXT, origen TEXT DEFAULT 'whatsapp', creado TIMESTAMP DEFAULT NOW())`)
+    .then(() => pool.query(`CREATE INDEX IF NOT EXISTS market_fotos_tel ON market_fotos (telefono)`))
+    .then(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS market_fotos_hash ON market_fotos (telefono, hash)`))
+    .catch(e => console.error('Market fotos WA:', e.message))
   pool.query(`CREATE TABLE IF NOT EXISTS market_ref (
       clave TEXT PRIMARY KEY, fotos TEXT DEFAULT '[]', descartadas TEXT DEFAULT '[]', buscado_en TIMESTAMP DEFAULT NOW())`)
     .catch(e => console.error('Market ref:', e.message))
@@ -159,8 +172,19 @@ module.exports = function (app, pool) {
     trabajando = false
   }
 
-  function publico(row) {
-    const fotos = fotosDe(row)
+  // Fotos de WhatsApp agrupadas por teléfono: { '3511234567': [id, id, ...] }
+  async function fotosWA() {
+    const r = await pool.query(`SELECT id, telefono FROM market_fotos ORDER BY id`)
+    const m = {}
+    for (const x of r.rows) (m[x.telefono] = m[x.telefono] || []).push(x.id)
+    return m
+  }
+  const baseUrl = req => (req.headers['x-forwarded-proto'] || req.protocol) + '://' + req.get('host')
+
+  function publico(row, wa, base) {
+    let fotos = fotosDe(row)
+    const t = telNorm(row.telefono)
+    if (!fotos.length && wa && t && wa[t]) fotos = wa[t].slice(0, 12).map(id => `${base}/api/market/foto/${id}`)
     const ref = !fotos.length && refActivo() ? (cache.get(claveRef(row.marca, row.modelo)) || []) : []
     if (!fotos.length && refActivo() && !cache.has(claveRef(row.marca, row.modelo))) encolar(row)
     return {
@@ -193,8 +217,9 @@ module.exports = function (app, pool) {
     try {
       await listo
       const r = await pool.query(`SELECT ${CAMPOS_PUBLICOS} FROM stock WHERE ${filtro()} ORDER BY created_at DESC NULLS LAST, marca, modelo`)
+      const wa = await fotosWA().catch(() => ({})), base = baseUrl(req)
       res.set('Cache-Control', 'public, max-age=120')
-      res.json({ whatsapp: process.env.MARKET_WHATSAPP || '5493515171111', autos: r.rows.map(publico), buscando: cola.size })
+      res.json({ whatsapp: process.env.MARKET_WHATSAPP || '5493515171111', autos: r.rows.map(x => publico(x, wa, base)), buscando: cola.size })
     } catch (e) { console.error('Market autos:', e.message); res.status(500).json({ error: 'No se pudo cargar el stock' }) }
   })
 
@@ -203,7 +228,7 @@ module.exports = function (app, pool) {
       await listo
       const r = await pool.query(`SELECT ${CAMPOS_PUBLICOS} FROM stock WHERE id=$1 AND ${filtro()}`, [parseInt(req.params.id) || 0])
       if (!r.rows.length) return res.status(404).json({ error: 'Auto no encontrado' })
-      res.json(publico(r.rows[0]))
+      res.json(publico(r.rows[0], await fotosWA().catch(() => ({})), baseUrl(req)))
     } catch (e) { res.status(500).json({ error: 'No se pudo cargar el auto' }) }
   })
 
@@ -216,6 +241,36 @@ module.exports = function (app, pool) {
       if (!r.rowCount) return res.status(404).json({ error: 'Auto no encontrado' })
       res.json({ ok: true, id: r.rows[0].id, fotos: fotos.map(driveDirecto) })
     } catch (e) { res.status(500).json({ error: e.message }) }
+  })
+
+  // Foto que mandó un cliente por WhatsApp (la sube el bot de venta/consignación)
+  app.post('/api/market/fotos-wa', async (req, res) => {
+    try {
+      if (!conClave(req)) return res.status(401).json({ error: 'Clave incorrecta' })
+      const tel = telNorm(req.body && req.body.telefono)
+      const mime = String((req.body && req.body.mime) || 'image/jpeg').split(';')[0]
+      const b64 = String((req.body && req.body.base64) || '').replace(/^data:[^,]+,/, '')
+      if (tel.length < 8) return res.status(400).json({ error: 'Falta el teléfono' })
+      if (!/^image\/(jpeg|png|webp)$/.test(mime)) return res.status(400).json({ error: 'Solo fotos jpg, png o webp' })
+      const buf = Buffer.from(b64, 'base64')
+      if (buf.length < 2000 || buf.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Foto vacía o de más de 8 MB' })
+      const n = await pool.query(`SELECT COUNT(*)::int AS n FROM market_fotos WHERE telefono=$1`, [tel])
+      if (n.rows[0].n >= 15) return res.json({ ok: true, ignorada: 'ya hay 15 fotos de este número' })
+      const hash = require('crypto').createHash('sha1').update(buf).digest('hex')
+      const r = await pool.query(`INSERT INTO market_fotos (telefono, mime, data, hash) VALUES ($1,$2,$3,$4)
+        ON CONFLICT (telefono, hash) DO NOTHING RETURNING id`, [tel, mime, buf, hash])
+      res.json({ ok: true, id: r.rows.length ? r.rows[0].id : null, repetida: !r.rows.length })
+    } catch (e) { console.error('Market fotos-wa:', e.message); res.status(500).json({ error: e.message }) }
+  })
+
+  app.get('/api/market/foto/:id', async (req, res) => {
+    try {
+      const r = await pool.query(`SELECT mime, data FROM market_fotos WHERE id=$1`, [parseInt(req.params.id) || 0])
+      if (!r.rows.length) return res.status(404).end()
+      res.set('Content-Type', r.rows[0].mime)
+      res.set('Cache-Control', 'public, max-age=2592000, immutable')
+      res.send(r.rows[0].data)
+    } catch (e) { res.status(500).end() }
   })
 
   // Marcar una foto de referencia como incorrecta: se saca y no vuelve a elegirse
