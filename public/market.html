@@ -376,7 +376,7 @@ footer b{color:var(--ink);font-family:var(--f-d)}
 </footer>
 
 <script>
-var API = /railway\.app$|localhost|127\.0\.0\.1/.test(location.hostname) ? '' : 'https://compara-conejo-production.up.railway.app'
+var API = /^compara-conejo[\w-]*\.up\.railway\.app$|^localhost$|^127\.0\.0\.1$/.test(location.hostname) ? '' : 'https://compara-conejo-production.up.railway.app'
 var qs = new URLSearchParams(location.search)
 var ADMIN = qs.has('admin')
 if (ADMIN) document.body.classList.add('isadmin')
