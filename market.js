@@ -30,7 +30,7 @@
 //    MARKET_KEY             clave para cargar fotos (si no está, usa IMPORT_KEY)
 //    MARKET_SOLO_TUTU=1     mostrar solo autos propios (ocultar los que vienen de grupos de reventa)
 //    MARKET_WHATSAPP        número de contacto que muestra la web (por defecto 5493515171111)
-//    MARKET_FOTOS_REF=0     apagar las fotos de referencia de internet
+//    MARKET_FOTOS_REF=1     prender las fotos de referencia de internet (apagadas por defecto)
 // ═══════════════════════════════════════════════════════════════════════════
 const path = require('path')
 const fetch = require('node-fetch')
@@ -155,7 +155,9 @@ module.exports = function (app, pool) {
       clave TEXT PRIMARY KEY, fotos TEXT DEFAULT '[]', descartadas TEXT DEFAULT '[]', buscado_en TIMESTAMP DEFAULT NOW())`)
     .catch(e => console.error('Market ref:', e.message))
 
-  const refActivo = () => process.env.MARKET_FOTOS_REF !== '0'
+  // Fotos de internet (Wikimedia) APAGADAS por defecto: los vehículos sin fotos del dueño muestran una silueta.
+  // Para volver a usarlas: MARKET_FOTOS_REF=1 en Railway.
+  const refActivo = () => process.env.MARKET_FOTOS_REF === '1'
   const cache = new Map()      // clave -> fotos[] (copia en memoria de market_ref)
   const cola = new Map()       // clave -> {marca, modelo, anio}
   let trabajando = false
