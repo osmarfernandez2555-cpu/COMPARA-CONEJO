@@ -150,6 +150,11 @@ module.exports = function (app, pool) {
       hash TEXT, origen TEXT DEFAULT 'whatsapp', creado TIMESTAMP DEFAULT NOW())`)
     .then(() => pool.query(`CREATE INDEX IF NOT EXISTS market_fotos_tel ON market_fotos (telefono)`))
     .then(() => pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS market_fotos_hash ON market_fotos (telefono, hash)`))
+    // Filtro de fotos: solo se muestran las que la IA confirma que son de un vehículo (estado = 'ok').
+    // Las fotos que ya estaban quedan 'pendiente' y se revisan solas en segundo plano.
+    .then(() => pool.query(`ALTER TABLE market_fotos ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'pendiente'`))
+    .then(() => pool.query(`ALTER TABLE market_fotos ADD COLUMN IF NOT EXISTS motivo TEXT`))
+    .then(() => pool.query(`ALTER TABLE market_fotos ADD COLUMN IF NOT EXISTS intentos INT DEFAULT 0`))
     .catch(e => console.error('Market fotos WA:', e.message))
   pool.query(`CREATE TABLE IF NOT EXISTS market_ref (
       clave TEXT PRIMARY KEY, fotos TEXT DEFAULT '[]', descartadas TEXT DEFAULT '[]', buscado_en TIMESTAMP DEFAULT NOW())`)
@@ -211,7 +216,7 @@ module.exports = function (app, pool) {
 
   // Fotos de WhatsApp agrupadas por teléfono: { '3511234567': [id, id, ...] }
   async function fotosWA() {
-    const r = await pool.query(`SELECT id, telefono FROM market_fotos ORDER BY id`)
+    const r = await pool.query(`SELECT id, telefono FROM market_fotos WHERE estado='ok' ORDER BY id`)
     const m = {}
     for (const x of r.rows) (m[x.telefono] = m[x.telefono] || []).push(x.id)
     return m
@@ -281,7 +286,86 @@ module.exports = function (app, pool) {
     } catch (e) { res.status(500).json({ error: e.message }) }
   })
 
-  // Foto que mandó un cliente por WhatsApp (la sube el bot de venta/consignación)
+  // ── Filtro de fotos: solo vehículos ───────────────────────────────────────
+  // Cada foto que llega por WhatsApp se mira con IA (Claude o Gemini). Solo se publica si es de un
+  // auto, camioneta o moto (por fuera, por dentro, motor, tablero, baúl, detalles). Quedan afuera:
+  // personas, selfies, documentos (DNI, cédula, título), capturas de pantalla, memes, fotos
+  // íntimas o de cualquier otra cosa. Si la IA no está disponible, la foto espera (no se publica).
+  //   MARKET_FILTRO=0            apagar el filtro (se publica todo, como antes)
+  //   MARKET_VISION_MODEL        modelo de Claude (por defecto claude-haiku-5-5)
+  //   GEMINI_API_KEY             alternativa si no hay ANTHROPIC_API_KEY
+  const filtroActivo = () => process.env.MARKET_FILTRO !== '0'
+  const PROMPT_FILTRO = 'Sos el filtro de fotos de una concesionaria de autos. Mirá la imagen y respondé SOLO un JSON, sin texto extra: ' +
+    '{"vehiculo":true|false,"tipo":"exterior|interior|motor|tablero|baul|detalle|documento|persona|captura|otro","motivo":"pocas palabras en español"}. ' +
+    '"vehiculo":true SOLO si la foto muestra de forma clara un auto, camioneta, utilitario o moto (o una parte: interior, tablero, motor, baúl, ruedas, ' +
+    'detalle de carrocería, odómetro) y no hay nada inapropiado. "vehiculo":false si el protagonista es una persona o selfie, un documento (DNI, cédula, título, ' +
+    'papeles, recibos), una captura de pantalla o chat, un meme, un producto, un animal, un paisaje o lugar sin vehículo, ' +
+    'un dibujo o publicidad, o si hay desnudez, violencia o contenido sexual. Ante la duda, false.'
+  function leerJson(t) {
+    const m = String(t || '').match(/\{[\s\S]*\}/)
+    if (!m) throw new Error('respuesta sin JSON')
+    const j = JSON.parse(m[0])
+    return { vehiculo: j.vehiculo === true || j.vehiculo === 'true', tipo: String(j.tipo || ''), motivo: String(j.motivo || '').slice(0, 120) }
+  }
+  async function clasificar(buf, mime) {
+    if (buf.length > 4.5 * 1024 * 1024) return { revisar: true, motivo: 'foto muy pesada para la IA: revisar a mano' }
+    const b64 = buf.toString('base64')
+    if (process.env.ANTHROPIC_API_KEY) {
+      const r = await fetch(process.env.MARKET_VISION_URL || 'https://api.anthropic.com/v1/messages', {
+        method: 'POST', timeout: 30000,
+        headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: process.env.MARKET_VISION_MODEL || 'claude-haiku-5-5', max_tokens: 150, messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } }, { type: 'text', text: PROMPT_FILTRO }] }] })
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error('Claude ' + r.status + ' ' + ((d.error && d.error.message) || ''))
+      return leerJson((d.content || []).map(c => c.text || '').join(''))
+    }
+    if (process.env.GEMINI_API_KEY) {
+      const modelo = process.env.MARKET_VISION_MODEL_GEMINI || 'gemini-2.5-flash'
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        method: 'POST', timeout: 30000, headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: PROMPT_FILTRO }] }], generationConfig: { temperature: 0 } })
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error('Gemini ' + r.status + ' ' + ((d.error && d.error.message) || ''))
+      return leerJson((((d.candidates || [])[0] || {}).content || { parts: [] }).parts.map(p => p.text || '').join(''))
+    }
+    throw new Error('falta ANTHROPIC_API_KEY o GEMINI_API_KEY para mirar las fotos')
+  }
+  // Mira una foto guardada y le pone estado: ok / rechazada / revisar (a mano) / pendiente (reintenta)
+  async function revisarFoto(id) {
+    const r = await pool.query(`SELECT mime, data, intentos FROM market_fotos WHERE id=$1`, [id])
+    if (!r.rows.length) return 'inexistente'
+    if (!filtroActivo()) { await pool.query(`UPDATE market_fotos SET estado='ok', motivo='filtro apagado' WHERE id=$1`, [id]); return 'ok' }
+    try {
+      const v = await clasificar(r.rows[0].data, r.rows[0].mime)
+      const estado = v.revisar ? 'revisar' : v.vehiculo ? 'ok' : 'rechazada'
+      await pool.query(`UPDATE market_fotos SET estado=$2, motivo=$3 WHERE id=$1`, [id, estado, (v.tipo ? v.tipo + ': ' : '') + (v.motivo || '')])
+      if (estado === 'rechazada') console.log(`🚫 Market: foto ${id} rechazada (${v.tipo}: ${v.motivo})`)
+      return estado
+    } catch (e) {
+      const n = (r.rows[0].intentos || 0) + 1
+      await pool.query(`UPDATE market_fotos SET intentos=$2, motivo=$3, estado=$4 WHERE id=$1`, [id, n, 'error IA: ' + e.message.slice(0, 100), n >= 6 ? 'revisar' : 'pendiente'])
+      console.error('Market filtro foto', id, e.message)
+      return 'pendiente'
+    }
+  }
+  // Cada 2 minutos revisa las pendientes (las que quedaron de antes y las que fallaron)
+  let revisando = false
+  async function revisarPendientes() {
+    if (revisando) return
+    revisando = true
+    try {
+      const r = await pool.query(`SELECT id FROM market_fotos WHERE estado='pendiente' ORDER BY id LIMIT 8`)
+      for (const x of r.rows) { await revisarFoto(x.id); await new Promise(z => setTimeout(z, 600)) }
+      if (r.rows.length) console.log(`🔎 Market: revisadas ${r.rows.length} foto(s) pendientes`)
+    } catch (e) { console.error('Market revisarPendientes:', e.message) } finally { revisando = false }
+  }
+  setTimeout(revisarPendientes, 20000)
+  setInterval(revisarPendientes, 2 * 60 * 1000)
+
+  // Foto que mandó un cliente por WhatsApp (la sube el bot de venta/consignación o el CRM)
   app.post('/api/market/fotos-wa', async (req, res) => {
     try {
       if (!conClave(req)) return res.status(401).json({ error: 'Clave incorrecta' })
@@ -292,23 +376,66 @@ module.exports = function (app, pool) {
       if (!/^image\/(jpeg|png|webp)$/.test(mime)) return res.status(400).json({ error: 'Solo fotos jpg, png o webp' })
       const buf = Buffer.from(b64, 'base64')
       if (buf.length < 2000 || buf.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Foto vacía o de más de 8 MB' })
-      const n = await pool.query(`SELECT COUNT(*)::int AS n FROM market_fotos WHERE telefono=$1`, [tel])
+      const n = await pool.query(`SELECT COUNT(*)::int AS n FROM market_fotos WHERE telefono=$1 AND estado IN ('ok','pendiente')`, [tel])
       if (n.rows[0].n >= 15) return res.json({ ok: true, ignorada: 'ya hay 15 fotos de este número' })
       const hash = require('crypto').createHash('sha1').update(buf).digest('hex')
-      const r = await pool.query(`INSERT INTO market_fotos (telefono, mime, data, hash) VALUES ($1,$2,$3,$4)
+      const r = await pool.query(`INSERT INTO market_fotos (telefono, mime, data, hash, estado) VALUES ($1,$2,$3,$4,'pendiente')
         ON CONFLICT (telefono, hash) DO NOTHING RETURNING id`, [tel, mime, buf, hash])
-      res.json({ ok: true, id: r.rows.length ? r.rows[0].id : null, repetida: !r.rows.length })
+      if (!r.rows.length) return res.json({ ok: true, id: null, repetida: true })
+      const estado = await revisarFoto(r.rows[0].id)
+      res.json({ ok: true, id: r.rows[0].id, repetida: false, estado, filtrada: estado === 'rechazada' })
     } catch (e) { console.error('Market fotos-wa:', e.message); res.status(500).json({ error: e.message }) }
   })
 
+  // Las fotos que no están aprobadas solo las ve quien tiene la clave (pantalla de revisión)
+  const claveQuery = req => conClave(req) || (process.env.MARKET_KEY || process.env.IMPORT_KEY) && req.query.clave === (process.env.MARKET_KEY || process.env.IMPORT_KEY)
   app.get('/api/market/foto/:id', async (req, res) => {
     try {
-      const r = await pool.query(`SELECT mime, data FROM market_fotos WHERE id=$1`, [parseInt(req.params.id) || 0])
+      const r = await pool.query(`SELECT mime, data, estado FROM market_fotos WHERE id=$1`, [parseInt(req.params.id) || 0])
       if (!r.rows.length) return res.status(404).end()
+      if (r.rows[0].estado !== 'ok' && !claveQuery(req)) return res.status(404).end()
       res.set('Content-Type', r.rows[0].mime)
-      res.set('Cache-Control', 'public, max-age=2592000, immutable')
+      res.set('Cache-Control', r.rows[0].estado === 'ok' ? 'public, max-age=2592000, immutable' : 'private, no-store')
       res.send(r.rows[0].data)
     } catch (e) { res.status(500).end() }
+  })
+
+  // Pantalla de revisión: /api/market/fotos-wa/revision?clave=MARKET_KEY
+  app.get('/api/market/fotos-wa/revision', async (req, res) => {
+    try {
+      if (!claveQuery(req)) return res.status(401).send('Clave incorrecta: agregá ?clave=TU_MARKET_KEY')
+      const c = await pool.query(`SELECT estado, COUNT(*)::int n FROM market_fotos GROUP BY estado`)
+      const r = await pool.query(`SELECT id, telefono, estado, motivo FROM market_fotos WHERE estado <> 'ok' ORDER BY id DESC LIMIT 120`)
+      const k = encodeURIComponent(req.query.clave)
+      const esc = t => String(t || '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]))
+      res.set('Content-Type', 'text/html; charset=utf-8').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fotos del Market</title>
+<style>body{font:14px system-ui;margin:16px;background:#f5f5f5}h1{font-size:18px}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}.c{background:#fff;border-radius:10px;padding:8px;box-shadow:0 1px 3px #0002}.c img{width:100%;height:140px;object-fit:cover;border-radius:6px}.m{font-size:12px;color:#555;margin:4px 0;min-height:30px}button{padding:6px 10px;border:0;border-radius:6px;cursor:pointer;font-weight:600}.a{background:#16a34a;color:#fff}.r{background:#dc2626;color:#fff}.e{display:inline-block;font-size:11px;padding:2px 6px;border-radius:5px;background:#eee}</style>
+<h1>Fotos del Market · ${c.rows.map(x => x.estado + ': ' + x.n).join(' · ')}</h1>
+<p>Acá están las fotos que la IA no aprobó (o que esperan revisión). Aprobá las que sí son de un auto; se publican en el Market.</p>
+<div class="g">${r.rows.map(x => `<div class="c" id="f${x.id}"><img src="/api/market/foto/${x.id}?clave=${k}" loading="lazy"><div class="m"><span class="e">${esc(x.estado)}</span> ${esc(x.telefono)}<br>${esc(x.motivo)}</div>
+<button class="a" onclick="d(${x.id},'aprobar')">Aprobar</button> <button class="r" onclick="d(${x.id},'rechazar')">Rechazar</button></div>`).join('') || '<p>No hay fotos para revisar ✅</p>'}</div>
+<script>function d(id,a){fetch('/api/market/fotos-wa/'+id+'/'+a+'?clave=${k}',{method:'POST'}).then(r=>r.json()).then(j=>{if(j.ok)document.getElementById('f'+id).remove();else alert(j.error)})}</script>`)
+    } catch (e) { res.status(500).send(e.message) }
+  })
+  for (const [accion, estado] of [['aprobar', 'ok'], ['rechazar', 'rechazada']]) {
+    app.post('/api/market/fotos-wa/:id/' + accion, async (req, res) => {
+      try {
+        if (!claveQuery(req)) return res.status(401).json({ error: 'Clave incorrecta' })
+        const r = await pool.query(`UPDATE market_fotos SET estado=$2, motivo=COALESCE(motivo,'') || ' (manual)' WHERE id=$1 RETURNING id`, [parseInt(req.params.id) || 0, estado])
+        res.json({ ok: !!r.rowCount, error: r.rowCount ? undefined : 'No existe esa foto' })
+      } catch (e) { res.status(500).json({ error: e.message }) }
+    })
+  }
+  // Volver a pasar el filtro por todas las fotos (por ejemplo después de cambiar de modelo): POST ?todas=1
+  app.post('/api/market/fotos-wa/revisar', async (req, res) => {
+    try {
+      if (!claveQuery(req)) return res.status(401).json({ error: 'Clave incorrecta' })
+      const r = await pool.query(req.query.todas === '1'
+        ? `UPDATE market_fotos SET estado='pendiente', intentos=0 RETURNING id`
+        : `UPDATE market_fotos SET estado='pendiente', intentos=0 WHERE estado IN ('revisar','pendiente') RETURNING id`)
+      setTimeout(revisarPendientes, 500)
+      res.json({ ok: true, a_revisar: r.rowCount })
+    } catch (e) { res.status(500).json({ error: e.message }) }
   })
 
   // Marcar una foto de referencia como incorrecta: se saca y no vuelve a elegirse
